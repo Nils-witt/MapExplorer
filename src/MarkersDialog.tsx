@@ -1,19 +1,17 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import {
-  Box,
-  Button,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Divider from '@mui/material/Divider';
+import Drawer from '@mui/material/Drawer';
+import IconButton from '@mui/material/IconButton';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
@@ -55,6 +53,7 @@ export function MarkersDialog({
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [importCsvText, setImportCsvText] = useState<string | null>(null);
+  const [importKey, setImportKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const startEditMarker = (marker: LocalMarker) => {
@@ -105,6 +104,7 @@ export function MarkersDialog({
     }
     const text = await file.text();
     setImportCsvText(text);
+    setImportKey((key) => key + 1);
   };
 
   const handleCsvImportDialogClose = () => {
@@ -284,6 +284,7 @@ export function MarkersDialog({
         </Stack>
       </Box>
       <CsvImportDialog
+        key={importKey}
         open={importCsvText !== null}
         csvText={importCsvText ?? ''}
         onClose={handleCsvImportDialogClose}

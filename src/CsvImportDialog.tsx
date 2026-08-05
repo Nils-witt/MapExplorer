@@ -1,28 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormControlLabel,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from '@mui/material';
-import type { SelectChangeEvent } from '@mui/material';
+import { useMemo, useState } from 'react';
+import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import FormControl from '@mui/material/FormControl';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import Stack from '@mui/material/Stack';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   buildMarkersFromRows,
   CSV_DELIMITERS,
@@ -45,47 +43,56 @@ interface CsvImportDialogProps {
 
 type MappingField = keyof ColumnMapping;
 
+interface InitialCsvState {
+  delimiterChoice: string;
+  customDelimiter: string;
+  hasHeader: boolean;
+  mapping: ColumnMapping;
+}
+
+function computeInitialState(csvText: string): InitialCsvState {
+  const detected = detectDelimiter(csvText);
+  const isKnownDelimiter = CSV_DELIMITERS.some(
+    (option) => option.value === detected,
+  );
+  const rows = parseCsvRows(csvText, detected);
+  const headerDetected = looksLikeHeaderRow(rows[0]);
+  const mapping = headerDetected
+    ? guessColumnMapping(rows[0])
+    : {
+        name: rows[0]?.[0] !== undefined ? 0 : null,
+        lat: rows[0]?.[1] !== undefined ? 1 : null,
+        lng: rows[0]?.[2] !== undefined ? 2 : null,
+      };
+  return {
+    delimiterChoice: isKnownDelimiter ? detected : CUSTOM_DELIMITER,
+    customDelimiter: isKnownDelimiter ? '' : detected,
+    hasHeader: headerDetected,
+    mapping,
+  };
+}
+
 export function CsvImportDialog({
   open,
   csvText,
   onClose,
   onImport,
 }: CsvImportDialogProps) {
-  const [delimiterChoice, setDelimiterChoice] = useState(',');
-  const [customDelimiter, setCustomDelimiter] = useState('');
-  const [hasHeader, setHasHeader] = useState(true);
-  const [mapping, setMapping] = useState<ColumnMapping>({
-    name: null,
-    lat: null,
-    lng: null,
-  });
+  // Computed once on mount; the parent remounts this component (via `key`)
+  // whenever a new file is selected, so re-deriving these from csvText in
+  // an effect isn't necessary.
+  const [initialState] = useState(() => computeInitialState(csvText));
+  const [delimiterChoice, setDelimiterChoice] = useState(
+    initialState.delimiterChoice,
+  );
+  const [customDelimiter, setCustomDelimiter] = useState(
+    initialState.customDelimiter,
+  );
+  const [hasHeader, setHasHeader] = useState(initialState.hasHeader);
+  const [mapping, setMapping] = useState<ColumnMapping>(initialState.mapping);
 
   const activeDelimiter =
     delimiterChoice === CUSTOM_DELIMITER ? customDelimiter : delimiterChoice;
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const detected = detectDelimiter(csvText);
-    const isKnown = CSV_DELIMITERS.some((option) => option.value === detected);
-    setDelimiterChoice(isKnown ? detected : CUSTOM_DELIMITER);
-    setCustomDelimiter(isKnown ? '' : detected);
-
-    const rows = parseCsvRows(csvText, detected);
-    const headerDetected = looksLikeHeaderRow(rows[0]);
-    setHasHeader(headerDetected);
-    if (headerDetected) {
-      setMapping(guessColumnMapping(rows[0]));
-    } else {
-      setMapping({
-        name: rows[0]?.[0] !== undefined ? 0 : null,
-        lat: rows[0]?.[1] !== undefined ? 1 : null,
-        lng: rows[0]?.[2] !== undefined ? 2 : null,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, csvText]);
 
   const allRows = useMemo(
     () => parseCsvRows(csvText, activeDelimiter || ','),
@@ -150,7 +157,7 @@ export function CsvImportDialog({
                 <MenuItem value={CUSTOM_DELIMITER}>Custom</MenuItem>
               </Select>
             </FormControl>
-            {delimiterChoice === CUSTOM_DELIMITER && (
+            {delimiterChoice === CUSTOM_DELIMITER ? (
               <TextField
                 label="Custom delimiter"
                 size="small"
@@ -159,7 +166,7 @@ export function CsvImportDialog({
                 sx={{ width: 160 }}
                 slotProps={{ htmlInput: { maxLength: 1 } }}
               />
-            )}
+            ) : null}
             <FormControlLabel
               control={
                 <Checkbox
@@ -246,20 +253,20 @@ export function CsvImportDialog({
                   </TableBody>
                 </Table>
               </TableContainer>
-              {dataRows.length > PREVIEW_ROW_COUNT && (
+              {dataRows.length > PREVIEW_ROW_COUNT ? (
                 <Typography variant="body2" color="text.secondary">
                   Showing {PREVIEW_ROW_COUNT} of {dataRows.length} rows.
                 </Typography>
-              )}
+              ) : null}
             </>
           )}
 
-          {!mappingComplete && columnCount > 0 && (
+          {!mappingComplete && columnCount > 0 ? (
             <Alert severity="info">
               Select a column for name, latitude, and longitude to continue.
             </Alert>
-          )}
-          {mappingComplete && (
+          ) : null}
+          {mappingComplete ? (
             <Alert severity={result.markers.length > 0 ? 'success' : 'warning'}>
               {result.markers.length} marker
               {result.markers.length === 1 ? '' : 's'} ready to import
@@ -268,7 +275,7 @@ export function CsvImportDialog({
                 : ''}
               .
             </Alert>
-          )}
+          ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>

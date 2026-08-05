@@ -1,7 +1,12 @@
 import type { LocalMarker } from './types';
 
+const CSV_FIELD_NEEDS_QUOTING = /[",\n]/;
+const CSV_QUOTE = /"/g;
+
 function escapeCsvField(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  return CSV_FIELD_NEEDS_QUOTING.test(value)
+    ? `"${value.replace(CSV_QUOTE, '""')}"`
+    : value;
 }
 
 export function markersToCsv(markers: LocalMarker[]): string {
@@ -96,8 +101,10 @@ export function detectDelimiter(text: string): string {
   return best;
 }
 
+const HEADER_FIELD_PATTERN = /name|lat|lo?ng/i;
+
 export function looksLikeHeaderRow(row: string[] | undefined): boolean {
-  return !!row && row.some((field) => /name|lat|lo?ng/i.test(field));
+  return !!row && row.some((field) => HEADER_FIELD_PATTERN.test(field));
 }
 
 export interface ColumnMapping {
@@ -106,15 +113,19 @@ export interface ColumnMapping {
   lng: number | null;
 }
 
+const NAME_FIELD_PATTERN = /name/i;
+const LAT_FIELD_PATTERN = /lat/i;
+const LNG_FIELD_PATTERN = /lo?ng/i;
+
 export function guessColumnMapping(header: string[]): ColumnMapping {
   const findIndex = (pattern: RegExp): number | null => {
     const index = header.findIndex((field) => pattern.test(field));
     return index === -1 ? null : index;
   };
   return {
-    name: findIndex(/name/i),
-    lat: findIndex(/lat/i),
-    lng: findIndex(/lo?ng/i),
+    name: findIndex(NAME_FIELD_PATTERN),
+    lat: findIndex(LAT_FIELD_PATTERN),
+    lng: findIndex(LNG_FIELD_PATTERN),
   };
 }
 
