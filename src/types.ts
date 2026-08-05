@@ -4,4 +4,5 @@ export interface Overlay {
   tiles: string[];
   enabled: boolean;
   authorizationHeader?: string;
+  opacity?: number;
 }

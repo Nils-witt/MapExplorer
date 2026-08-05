@@ -3,6 +3,7 @@ import type { Overlay } from './types';
 
 const OVERLAY_SOURCE_PREFIX = 'overlay-source-';
 const OVERLAY_LAYER_PREFIX = 'overlay-layer-';
+export const DEFAULT_OVERLAY_OPACITY = 0.8;
 
 export function applyOverlays(map: MapLibreMap, overlays: Overlay[]): void {
   const style = map.getStyle();
@@ -44,13 +45,17 @@ export function applyOverlays(map: MapLibreMap, overlays: Overlay[]): void {
       });
     }
 
+    const opacity = overlay.opacity ?? DEFAULT_OVERLAY_OPACITY;
+
     if (!map.getLayer(layerId)) {
       map.addLayer({
         id: layerId,
         type: 'raster',
         source: sourceId,
-        paint: { 'raster-opacity': 0.8 },
+        paint: { 'raster-opacity': opacity },
       });
+    } else {
+      map.setPaintProperty(layerId, 'raster-opacity', opacity);
     }
   }
 

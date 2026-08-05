@@ -119,6 +119,14 @@ export function App() {
     ]);
   };
 
+  const handleChangeOverlayOpacity = (id: string, opacity: number) => {
+    setOverlays((prev) =>
+      prev.map((overlay) =>
+        overlay.id === id ? { ...overlay, opacity } : overlay,
+      ),
+    );
+  };
+
   const handleRemoveOverlay = (id: string) => {
     setOverlays((prev) => prev.filter((overlay) => overlay.id !== id));
   };
@@ -171,6 +179,7 @@ export function App() {
         overlays={overlays}
         onToggleOverlay={handleToggleOverlay}
         onAddOverlay={handleAddOverlay}
+        onChangeOverlayOpacity={handleChangeOverlayOpacity}
         onRemoveOverlay={handleRemoveOverlay}
         onEditOverlay={handleEditOverlay}
         onMoveOverlay={handleMoveOverlay}

@@ -14,6 +14,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Slider,
   Stack,
   TextField,
   Typography,
@@ -24,7 +25,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
+import OpacityIcon from '@mui/icons-material/Opacity';
 import type { Overlay } from './types';
+import { DEFAULT_OVERLAY_OPACITY } from './overlayMap';
 import { ServerMapsSection } from './ServerMapsSection';
 
 interface SettingsDialogProps {
@@ -39,6 +42,7 @@ interface SettingsDialogProps {
     tilesUrl: string,
     authorizationHeader?: string,
   ) => void;
+  onChangeOverlayOpacity: (id: string, opacity: number) => void;
   onRemoveOverlay: (id: string) => void;
   onEditOverlay: (
     id: string,
@@ -57,6 +61,7 @@ export function SettingsDialog({
   overlays,
   onToggleOverlay,
   onAddOverlay,
+  onChangeOverlayOpacity,
   onRemoveOverlay,
   onEditOverlay,
   onMoveOverlay,
@@ -246,7 +251,7 @@ export function SettingsDialog({
                       <ListItem
                         key={overlay.id}
                         disablePadding
-                        sx={{ pr: 17 }}
+                        sx={{ display: 'block', pr: 17, py: 0.5 }}
                         secondaryAction={
                           <Stack direction="row" spacing={0.5}>
                             <IconButton
@@ -296,6 +301,38 @@ export function SettingsDialog({
                           </ListItemIcon>
                           <ListItemText primary={overlay.name} />
                         </ListItemButton>
+                        <Stack
+                          direction="row"
+                          spacing={1.5}
+                          sx={{ alignItems: 'center', pl: 5, pr: 2 }}
+                        >
+                          <OpacityIcon fontSize="small" color="action" />
+                          <Slider
+                            size="small"
+                            value={overlay.opacity ?? DEFAULT_OVERLAY_OPACITY}
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            aria-label={`${overlay.name} opacity`}
+                            onChange={(_event, value) =>
+                              onChangeOverlayOpacity(
+                                overlay.id,
+                                Array.isArray(value) ? value[0] : value,
+                              )
+                            }
+                          />
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ minWidth: 36, textAlign: 'right' }}
+                          >
+                            {Math.round(
+                              (overlay.opacity ?? DEFAULT_OVERLAY_OPACITY) *
+                                100,
+                            )}
+                            %
+                          </Typography>
+                        </Stack>
                       </ListItem>
                     ),
                   )}
