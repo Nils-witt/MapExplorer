@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+.git
+.github
+.husky
+.vscode
+.idea
+*.log
+.env
+.env.*
+!.env.example
