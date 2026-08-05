@@ -23,7 +23,9 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import PlaceIcon from '@mui/icons-material/Place';
 import SaveIcon from '@mui/icons-material/Save';
 import type { LocalMarker } from './types';
-import { downloadMarkersCsv, parseMarkersCsv } from './markers';
+import { downloadMarkersCsv } from './markers';
+import type { MarkersImportResult } from './markers';
+import { CsvImportDialog } from './CsvImportDialog';
 
 interface MarkersDialogProps {
   open: boolean;
@@ -52,6 +54,7 @@ export function MarkersDialog({
 }: MarkersDialogProps) {
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [importCsvText, setImportCsvText] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const startEditMarker = (marker: LocalMarker) => {
@@ -101,10 +104,21 @@ export function MarkersDialog({
       return;
     }
     const text = await file.text();
-    const { markers: imported, skipped } = parseMarkersCsv(text);
+    setImportCsvText(text);
+  };
+
+  const handleCsvImportDialogClose = () => {
+    setImportCsvText(null);
+  };
+
+  const handleCsvImportConfirm = ({
+    markers: imported,
+    skipped,
+  }: MarkersImportResult) => {
     if (imported.length > 0) {
       onImport(imported);
     }
+    setImportCsvText(null);
     if (skipped > 0) {
       window.alert(
         `Imported ${imported.length} marker${imported.length === 1 ? '' : 's'}, skipped ${skipped} invalid row${skipped === 1 ? '' : 's'}.`,
@@ -269,6 +283,12 @@ export function MarkersDialog({
           <Button onClick={handleDialogClose}>Close</Button>
         </Stack>
       </Box>
+      <CsvImportDialog
+        open={importCsvText !== null}
+        csvText={importCsvText ?? ''}
+        onClose={handleCsvImportDialogClose}
+        onImport={handleCsvImportConfirm}
+      />
     </Drawer>
   );
 }

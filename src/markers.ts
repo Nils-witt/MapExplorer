@@ -25,7 +25,10 @@ export function downloadMarkersCsv(markers: LocalMarker[]): void {
   URL.revokeObjectURL(url);
 }
 
-function parseCsvRows(text: string): string[][] {
+export function parseCsvRows(
+  text: string,
+  delimiter: string = ',',
+): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -50,7 +53,7 @@ function parseCsvRows(text: string): string[][] {
 
     if (char === '"') {
       inQuotes = true;
-    } else if (char === ',') {
+    } else if (char === delimiter) {
       row.push(field);
       field = '';
     } else if (char === '\r') {
@@ -72,32 +75,73 @@ function parseCsvRows(text: string): string[][] {
   return rows.filter((fields) => fields.some((value) => value.trim() !== ''));
 }
 
-export interface MarkersCsvImportResult {
+export const CSV_DELIMITERS: { value: string; label: string }[] = [
+  { value: ',', label: 'Comma (,)' },
+  { value: ';', label: 'Semicolon (;)' },
+  { value: '\t', label: 'Tab' },
+  { value: '|', label: 'Pipe (|)' },
+];
+
+export function detectDelimiter(text: string): string {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
+  let best = ',';
+  let bestCount = 0;
+  for (const { value } of CSV_DELIMITERS) {
+    const count = firstLine.split(value).length - 1;
+    if (count > bestCount) {
+      bestCount = count;
+      best = value;
+    }
+  }
+  return best;
+}
+
+export function looksLikeHeaderRow(row: string[] | undefined): boolean {
+  return !!row && row.some((field) => /name|lat|lo?ng/i.test(field));
+}
+
+export interface ColumnMapping {
+  name: number | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+export function guessColumnMapping(header: string[]): ColumnMapping {
+  const findIndex = (pattern: RegExp): number | null => {
+    const index = header.findIndex((field) => pattern.test(field));
+    return index === -1 ? null : index;
+  };
+  return {
+    name: findIndex(/name/i),
+    lat: findIndex(/lat/i),
+    lng: findIndex(/lo?ng/i),
+  };
+}
+
+export interface MarkersImportResult {
   markers: LocalMarker[];
   skipped: number;
 }
 
-export function parseMarkersCsv(text: string): MarkersCsvImportResult {
-  const rows = parseCsvRows(text);
-  if (rows.length === 0) {
-    return { markers: [], skipped: 0 };
-  }
-
-  const [firstRow] = rows;
-  const hasHeader =
-    firstRow.length >= 3 &&
-    /name/i.test(firstRow[0]) &&
-    /lat/i.test(firstRow[1]) &&
-    /lo?ng/i.test(firstRow[2]);
-  const dataRows = hasHeader ? rows.slice(1) : rows;
-
+export function buildMarkersFromRows(
+  rows: string[][],
+  mapping: ColumnMapping,
+): MarkersImportResult {
   const markers: LocalMarker[] = [];
   let skipped = 0;
 
-  dataRows.forEach((fields, index) => {
-    const name = (fields[0] ?? '').trim();
-    const lat = Number.parseFloat(fields[1] ?? '');
-    const lng = Number.parseFloat(fields[2] ?? '');
+  if (mapping.name === null || mapping.lat === null || mapping.lng === null) {
+    return { markers, skipped: rows.length };
+  }
+
+  const nameIndex = mapping.name;
+  const latIndex = mapping.lat;
+  const lngIndex = mapping.lng;
+
+  rows.forEach((fields, index) => {
+    const name = (fields[nameIndex] ?? '').trim();
+    const lat = Number.parseFloat(fields[latIndex] ?? '');
+    const lng = Number.parseFloat(fields[lngIndex] ?? '');
     if (
       !name ||
       !Number.isFinite(lat) ||
