@@ -23,6 +23,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
 import type { Overlay } from './types';
+import { ServerMapsSection } from './ServerMapsSection';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -319,6 +320,15 @@ export function SettingsDialog({
               </Stack>
             </Stack>
           </Stack>
+
+          <Divider />
+
+          <ServerMapsSection
+            overlays={overlays}
+            onAddOverlay={onAddOverlay}
+            onEditOverlay={onEditOverlay}
+            onRemoveOverlay={onRemoveOverlay}
+          />
         </Stack>
       </DialogContent>
       <DialogActions>
