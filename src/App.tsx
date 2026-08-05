@@ -52,7 +52,7 @@ export function App() {
       .catch((error) => {
         console.error('Failed to load config.json:', error);
       });
-  }, [overlays]);
+  }, []);
 
   useEffect(() => {
     overlaysRef.current = overlays;
