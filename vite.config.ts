@@ -38,6 +38,7 @@ export default defineConfig({
       workbox: {
         navigateFallback: 'index.html',
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        navigateFallbackDenylist: [/^\/config\.json/],
         runtimeCaching: [
           {
             // Raster/vector map tiles, e.g. .../{z}/{x}/{y}.png or .../{z}/{x}/{y}.pbf
