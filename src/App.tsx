@@ -202,6 +202,15 @@ export function App() {
     setMarkers((prev) => prev.filter((marker) => marker.id !== id));
   };
 
+  const handleRemoveAllMarkers = () => {
+    setMarkers([]);
+    setSelectedMarkerId(null);
+  };
+
+  const handleImportMarkers = (imported: LocalMarker[]) => {
+    setMarkers((prev) => [...prev, ...imported]);
+  };
+
   const handleMoveMarker = (id: string, lng: number, lat: number) => {
     setMarkers((prev) =>
       prev.map((marker) =>
@@ -325,7 +334,9 @@ export function App() {
         markers={markers}
         onRename={handleRenameMarker}
         onRemove={handleRemoveMarker}
+        onRemoveAll={handleRemoveAllMarkers}
         onLocate={handleLocateMarker}
+        onImport={handleImportMarkers}
       />
     </>
   );

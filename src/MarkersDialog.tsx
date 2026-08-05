@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
+import { useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import {
   Box,
   Button,
@@ -16,12 +16,14 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import EditIcon from '@mui/icons-material/Edit';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import PlaceIcon from '@mui/icons-material/Place';
 import SaveIcon from '@mui/icons-material/Save';
 import type { LocalMarker } from './types';
-import { downloadMarkersCsv } from './markers';
+import { downloadMarkersCsv, parseMarkersCsv } from './markers';
 
 interface MarkersDialogProps {
   open: boolean;
@@ -29,7 +31,9 @@ interface MarkersDialogProps {
   markers: LocalMarker[];
   onRename: (id: string, name: string) => void;
   onRemove: (id: string) => void;
+  onRemoveAll: () => void;
   onLocate: (id: string) => void;
+  onImport: (markers: LocalMarker[]) => void;
 }
 
 function formatCoordinate(marker: LocalMarker): string {
@@ -42,10 +46,13 @@ export function MarkersDialog({
   markers,
   onRename,
   onRemove,
+  onRemoveAll,
   onLocate,
+  onImport,
 }: MarkersDialogProps) {
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const startEditMarker = (marker: LocalMarker) => {
     setEditingMarkerId(marker.id);
@@ -68,6 +75,41 @@ export function MarkersDialog({
   const handleDialogClose = () => {
     setEditingMarkerId(null);
     onClose();
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleRemoveAll = () => {
+    if (
+      window.confirm(
+        `Delete all ${markers.length} marker${markers.length === 1 ? '' : 's'}? This cannot be undone.`,
+      )
+    ) {
+      setEditingMarkerId(null);
+      onRemoveAll();
+    }
+  };
+
+  const handleImportFileChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    const text = await file.text();
+    const { markers: imported, skipped } = parseMarkersCsv(text);
+    if (imported.length > 0) {
+      onImport(imported);
+    }
+    if (skipped > 0) {
+      window.alert(
+        `Imported ${imported.length} marker${imported.length === 1 ? '' : 's'}, skipped ${skipped} invalid row${skipped === 1 ? '' : 's'}.`,
+      );
+    }
   };
 
   return (
@@ -95,9 +137,18 @@ export function MarkersDialog({
           }}
         >
           <Typography variant="h6">Markers</Typography>
-          <IconButton aria-label="Close" onClick={handleDialogClose}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <IconButton
+              aria-label="Delete all markers"
+              onClick={handleRemoveAll}
+              disabled={markers.length === 0}
+            >
+              <DeleteSweepIcon fontSize="small" />
+            </IconButton>
+            <IconButton aria-label="Close" onClick={handleDialogClose}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Stack>
         </Stack>
         <Divider />
         <Box sx={{ px: 2, py: 1.5, overflowY: 'auto', flex: 1 }}>
@@ -193,7 +244,20 @@ export function MarkersDialog({
           )}
         </Box>
         <Divider />
-        <Stack direction="row" sx={{ px: 2, py: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ px: 2, py: 1.5 }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            style={{ display: 'none' }}
+            onChange={handleImportFileChange}
+          />
+          <Button
+            onClick={handleImportClick}
+            startIcon={<FileUploadIcon fontSize="small" />}
+          >
+            Import CSV
+          </Button>
           <Button
             onClick={() => downloadMarkersCsv(markers)}
             disabled={markers.length === 0}
