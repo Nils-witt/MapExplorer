@@ -13,23 +13,19 @@ body,
   height: 100%;
 }
 
-.vector-source-control {
-  padding: 4px;
+.maplibregl-ctrl-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #333;
+  cursor: pointer;
 
-  &__form {
-    display: flex;
-    gap: 4px;
-  }
-
-  &__input {
-    width: 220px;
-    padding: 4px 6px;
-    font-size: 12px;
-  }
-
-  &__button {
-    padding: 4px 8px;
-    font-size: 12px;
-    cursor: pointer;
+  &:hover {
+    background-color: #f4f4f4;
   }
 }
