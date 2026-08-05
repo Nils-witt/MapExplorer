@@ -25,37 +25,18 @@ import {
   DEFAULT_SERVER_BASE_URL,
   login,
   listMaps,
+  overlayIdForMap,
   tileUrlForMap,
   ServerApiError,
 } from './serverApi';
-
-const SERVER_URL_STORAGE_KEY = 'mapexplorer.serverBaseUrl';
-const SERVER_USERNAME_STORAGE_KEY = 'mapexplorer.serverUsername';
-const SERVER_TOKEN_STORAGE_KEY = 'mapexplorer.serverToken';
-
-function loadStoredValue(key: string, fallback = ''): string {
-  try {
-    return localStorage.getItem(key) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function storeValue(key: string, value: string) {
-  try {
-    if (value) {
-      localStorage.setItem(key, value);
-    } else {
-      localStorage.removeItem(key);
-    }
-  } catch {
-    // localStorage unavailable (e.g. private browsing) - skip persistence
-  }
-}
-
-function overlayIdForMap(map: ServerMap): string {
-  return `server-${map.uuid}`;
-}
+import {
+  loadServerBaseUrl,
+  loadServerToken,
+  loadServerUsername,
+  saveServerBaseUrl,
+  saveServerToken,
+  saveServerUsername,
+} from './storage';
 
 interface ServerMapsSectionProps {
   overlays: Overlay[];
@@ -80,15 +61,11 @@ export function ServerMapsSection({
   onRemoveOverlay,
 }: ServerMapsSectionProps) {
   const [serverUrl, setServerUrl] = useState(() =>
-    loadStoredValue(SERVER_URL_STORAGE_KEY, DEFAULT_SERVER_BASE_URL),
+    loadServerBaseUrl(DEFAULT_SERVER_BASE_URL),
   );
-  const [username, setUsername] = useState(() =>
-    loadStoredValue(SERVER_USERNAME_STORAGE_KEY),
-  );
+  const [username, setUsername] = useState(loadServerUsername);
   const [password, setPassword] = useState('');
-  const [token, setToken] = useState(() =>
-    loadStoredValue(SERVER_TOKEN_STORAGE_KEY),
-  );
+  const [token, setToken] = useState(loadServerToken);
   const [maps, setMaps] = useState<ServerMap[] | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [loadingMaps, setLoadingMaps] = useState(false);
@@ -128,9 +105,9 @@ export function ServerMapsSection({
       setServerUrl(trimmedUrl);
       setToken(newToken);
       setPassword('');
-      storeValue(SERVER_URL_STORAGE_KEY, trimmedUrl);
-      storeValue(SERVER_USERNAME_STORAGE_KEY, username.trim());
-      storeValue(SERVER_TOKEN_STORAGE_KEY, newToken);
+      saveServerBaseUrl(trimmedUrl);
+      saveServerUsername(username.trim());
+      saveServerToken(newToken);
       await fetchMaps(newToken);
     } catch (err) {
       if (err instanceof ServerApiError) {
@@ -147,7 +124,7 @@ export function ServerMapsSection({
     setToken('');
     setMaps(null);
     setError(null);
-    storeValue(SERVER_TOKEN_STORAGE_KEY, '');
+    saveServerToken('');
   };
 
   const handleToggleMap = (map: ServerMap) => {

@@ -52,3 +52,7 @@ export async function listMaps(
 export function tileUrlForMap(baseUrl: string, map: ServerMap): string {
   return `${normalizeBaseUrl(baseUrl)}/maps/${map.uuid}/version/${map.currentVersion}/{z}/{x}/{y}.png`;
 }
+
+export function overlayIdForMap(map: ServerMap): string {
+  return `server-${map.uuid}`;
+}

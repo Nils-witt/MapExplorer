@@ -5,118 +5,17 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { SettingsDialog } from './SettingsDialog';
 import { SettingsControl } from './SettingsControl';
 import type { Overlay } from './types';
+import { applyOverlays, findAuthorizationHeader } from './overlayMap';
+import {
+  loadOverlays,
+  loadStyleUrl,
+  saveOverlays,
+  saveStyleUrl,
+} from './storage';
 
 const DEFAULT_STYLE_URL =
   import.meta.env.VITE_DEFAULT_STYLE_URL ??
   'https://demotiles.maplibre.org/style.json';
-
-const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
-const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';
-
-const OVERLAY_SOURCE_PREFIX = 'overlay-source-';
-const OVERLAY_LAYER_PREFIX = 'overlay-layer-';
-
-function loadStyleUrl(): string {
-  try {
-    return localStorage.getItem(STYLE_URL_STORAGE_KEY) ?? DEFAULT_STYLE_URL;
-  } catch {
-    return DEFAULT_STYLE_URL;
-  }
-}
-
-function loadOverlays(): Overlay[] {
-  try {
-    const stored = localStorage.getItem(OVERLAYS_STORAGE_KEY);
-    if (!stored) {
-      return [];
-    }
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function applyOverlays(map: MapLibreMap, overlays: Overlay[]) {
-  const style = map.getStyle();
-  if (!style) {
-    return;
-  }
-
-  const existingOverlayLayerIds = (style.layers ?? [])
-    .map((layer) => layer.id)
-    .filter((id) => id.startsWith(OVERLAY_LAYER_PREFIX));
-
-  for (const layerId of existingOverlayLayerIds) {
-    const overlayId = layerId.slice(OVERLAY_LAYER_PREFIX.length);
-    const overlay = overlays.find((candidate) => candidate.id === overlayId);
-    if (!overlay?.enabled) {
-      if (map.getLayer(layerId)) {
-        map.removeLayer(layerId);
-      }
-      const sourceId = `${OVERLAY_SOURCE_PREFIX}${overlayId}`;
-      if (map.getSource(sourceId)) {
-        map.removeSource(sourceId);
-      }
-    }
-  }
-
-  for (const overlay of overlays) {
-    if (!overlay.enabled) {
-      continue;
-    }
-
-    const sourceId = `${OVERLAY_SOURCE_PREFIX}${overlay.id}`;
-    const layerId = `${OVERLAY_LAYER_PREFIX}${overlay.id}`;
-
-    if (!map.getSource(sourceId)) {
-      map.addSource(sourceId, {
-        type: 'raster',
-        tiles: overlay.tiles,
-        tileSize: 256,
-      });
-    }
-
-    if (!map.getLayer(layerId)) {
-      map.addLayer({
-        id: layerId,
-        type: 'raster',
-        source: sourceId,
-        paint: { 'raster-opacity': 0.8 },
-      });
-    }
-  }
-
-  // Enforce stacking order: overlays earlier in the list are drawn on top.
-  // Moving each layer to the top in reverse-list order leaves the first
-  // overlay on top once every layer has been placed.
-  for (const overlay of [...overlays].reverse()) {
-    if (!overlay.enabled) {
-      continue;
-    }
-    const layerId = `${OVERLAY_LAYER_PREFIX}${overlay.id}`;
-    if (map.getLayer(layerId)) {
-      map.moveLayer(layerId);
-    }
-  }
-}
-
-function tileUrlPrefix(template: string): string {
-  return template.split('{')[0];
-}
-
-function findAuthorizationHeader(
-  url: string,
-  overlays: Overlay[],
-): string | undefined {
-  const overlay = overlays.find(
-    (candidate) =>
-      candidate.enabled &&
-      candidate.authorizationHeader &&
-      candidate.tiles.some((tile) => url.startsWith(tileUrlPrefix(tile))),
-  );
-  return overlay?.authorizationHeader;
-}
 
 export function App() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -125,24 +24,18 @@ export function App() {
   const isFirstStyleRender = useRef(true);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [styleUrl, setStyleUrl] = useState(loadStyleUrl);
+  const [styleUrl, setStyleUrl] = useState(() =>
+    loadStyleUrl(DEFAULT_STYLE_URL),
+  );
   const [overlays, setOverlays] = useState<Overlay[]>(loadOverlays);
 
   useEffect(() => {
     overlaysRef.current = overlays;
-    try {
-      localStorage.setItem(OVERLAYS_STORAGE_KEY, JSON.stringify(overlays));
-    } catch {
-      // localStorage unavailable (e.g. private browsing) - skip persistence
-    }
+    saveOverlays(overlays);
   }, [overlays]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STYLE_URL_STORAGE_KEY, styleUrl);
-    } catch {
-      // localStorage unavailable (e.g. private browsing) - skip persistence
-    }
+    saveStyleUrl(styleUrl);
   }, [styleUrl]);
 
   useEffect(() => {
