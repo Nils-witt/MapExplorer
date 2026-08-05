@@ -13,3 +13,10 @@ export interface MapPosition {
   bearing: number;
   pitch: number;
 }
+
+export interface LocalMarker {
+  id: string;
+  lng: number;
+  lat: number;
+  name: string;
+}

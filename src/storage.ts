@@ -1,4 +1,4 @@
-import type { MapPosition, Overlay } from './types';
+import type { LocalMarker, MapPosition, Overlay } from './types';
 
 const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
 const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';
@@ -6,6 +6,7 @@ const SERVER_URL_STORAGE_KEY = 'mapexplorer.serverBaseUrl';
 const SERVER_USERNAME_STORAGE_KEY = 'mapexplorer.serverUsername';
 const SERVER_TOKEN_STORAGE_KEY = 'mapexplorer.serverToken';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
+const MARKERS_STORAGE_KEY = 'mapexplorer.markers';
 
 function readValue(key: string, fallback = ''): string {
   try {
@@ -128,4 +129,34 @@ export function loadMapPosition(): MapPosition | null {
 
 export function saveMapPosition(position: MapPosition): void {
   writeValue(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
+}
+
+function isLocalMarker(value: unknown): value is LocalMarker {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.lng === 'number' &&
+    typeof candidate.lat === 'number' &&
+    typeof candidate.name === 'string'
+  );
+}
+
+export function loadMarkers(): LocalMarker[] {
+  const stored = readValue(MARKERS_STORAGE_KEY);
+  if (!stored) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed.filter(isLocalMarker) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveMarkers(markers: LocalMarker[]): void {
+  writeValue(MARKERS_STORAGE_KEY, JSON.stringify(markers));
 }

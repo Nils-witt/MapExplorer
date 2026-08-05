@@ -27,7 +27,9 @@ body,
   pointer-events: none;
 }
 
-.maplibregl-ctrl-settings {
+.maplibregl-ctrl-settings,
+.maplibregl-ctrl-add-marker,
+.maplibregl-ctrl-markers-list {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,5 +43,59 @@ body,
 
   &:hover {
     background-color: #f4f4f4;
+  }
+}
+
+.maplibregl-ctrl-group button.maplibregl-ctrl-add-marker.active {
+  background-color: #1976d2;
+  color: #fff;
+
+  &:hover {
+    background-color: #1565c0;
+  }
+}
+
+.marker-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: rgba(25, 118, 210, 0.9);
+  color: #fff;
+  font-size: 13px;
+  font-family: sans-serif;
+  pointer-events: none;
+}
+
+.local-marker-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+
+  &-input {
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+
+  &-delete {
+    align-self: flex-start;
+    padding: 4px 10px;
+    border: 1px solid #d32f2f;
+    border-radius: 3px;
+    background: none;
+    color: #d32f2f;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover {
+      background-color: #d32f2f;
+      color: #fff;
+    }
   }
 }
