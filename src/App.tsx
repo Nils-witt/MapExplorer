@@ -10,27 +10,32 @@ const DEFAULT_STYLE_URL =
   import.meta.env.VITE_DEFAULT_STYLE_URL ??
   'https://demotiles.maplibre.org/style.json';
 
-const DEFAULT_OVERLAYS: Overlay[] = [
-  {
-    id: 'openrailwaymap',
-    name: 'OpenRailwayMap',
-    tiles: [
-      'https://a.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
-      'https://b.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
-      'https://c.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
-    ],
-    enabled: false,
-  },
-  {
-    id: 'openseamap',
-    name: 'OpenSeaMap',
-    tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'],
-    enabled: false,
-  },
-];
+const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
+const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';
 
 const OVERLAY_SOURCE_PREFIX = 'overlay-source-';
 const OVERLAY_LAYER_PREFIX = 'overlay-layer-';
+
+function loadStyleUrl(): string {
+  try {
+    return localStorage.getItem(STYLE_URL_STORAGE_KEY) ?? DEFAULT_STYLE_URL;
+  } catch {
+    return DEFAULT_STYLE_URL;
+  }
+}
+
+function loadOverlays(): Overlay[] {
+  try {
+    const stored = localStorage.getItem(OVERLAYS_STORAGE_KEY);
+    if (!stored) {
+      return [];
+    }
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 function applyOverlays(map: MapLibreMap, overlays: Overlay[]) {
   const style = map.getStyle();
@@ -103,16 +108,29 @@ function findAuthorizationHeader(
 export function App() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const overlaysRef = useRef<Overlay[]>(DEFAULT_OVERLAYS);
+  const overlaysRef = useRef<Overlay[]>([]);
   const isFirstStyleRender = useRef(true);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [styleUrl, setStyleUrl] = useState(DEFAULT_STYLE_URL);
-  const [overlays, setOverlays] = useState<Overlay[]>(DEFAULT_OVERLAYS);
+  const [styleUrl, setStyleUrl] = useState(loadStyleUrl);
+  const [overlays, setOverlays] = useState<Overlay[]>(loadOverlays);
 
   useEffect(() => {
     overlaysRef.current = overlays;
+    try {
+      localStorage.setItem(OVERLAYS_STORAGE_KEY, JSON.stringify(overlays));
+    } catch {
+      // localStorage unavailable (e.g. private browsing) - skip persistence
+    }
   }, [overlays]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STYLE_URL_STORAGE_KEY, styleUrl);
+    } catch {
+      // localStorage unavailable (e.g. private browsing) - skip persistence
+    }
+  }, [styleUrl]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
@@ -199,6 +217,30 @@ export function App() {
     setOverlays((prev) => prev.filter((overlay) => overlay.id !== id));
   };
 
+  const handleEditOverlay = (
+    id: string,
+    name: string,
+    tilesUrl: string,
+    authorizationHeader?: string,
+  ) => {
+    const tiles = tilesUrl
+      .split(',')
+      .map((tile) => tile.trim())
+      .filter(Boolean);
+    setOverlays((prev) =>
+      prev.map((overlay) =>
+        overlay.id === id
+          ? {
+              ...overlay,
+              name,
+              tiles,
+              authorizationHeader: authorizationHeader || undefined,
+            }
+          : overlay,
+      ),
+    );
+  };
+
   return (
     <>
       <div ref={mapContainerRef} className="map" />
@@ -211,6 +253,7 @@ export function App() {
         onToggleOverlay={handleToggleOverlay}
         onAddOverlay={handleAddOverlay}
         onRemoveOverlay={handleRemoveOverlay}
+        onEditOverlay={handleEditOverlay}
       />
     </>
   );

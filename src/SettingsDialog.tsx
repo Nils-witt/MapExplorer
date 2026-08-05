@@ -19,6 +19,9 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import SaveIcon from '@mui/icons-material/Save';
+import CloseIcon from '@mui/icons-material/Close';
 import type { Overlay } from './types';
 
 interface SettingsDialogProps {
@@ -34,6 +37,12 @@ interface SettingsDialogProps {
     authorizationHeader?: string,
   ) => void;
   onRemoveOverlay: (id: string) => void;
+  onEditOverlay: (
+    id: string,
+    name: string,
+    tilesUrl: string,
+    authorizationHeader?: string,
+  ) => void;
 }
 
 export function SettingsDialog({
@@ -45,15 +54,22 @@ export function SettingsDialog({
   onToggleOverlay,
   onAddOverlay,
   onRemoveOverlay,
+  onEditOverlay,
 }: SettingsDialogProps) {
   const [styleUrlDraft, setStyleUrlDraft] = useState(styleUrl);
   const [newOverlayName, setNewOverlayName] = useState('');
   const [newOverlayUrl, setNewOverlayUrl] = useState('');
   const [newOverlayAuthHeader, setNewOverlayAuthHeader] = useState('');
+  const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editTilesUrl, setEditTilesUrl] = useState('');
+  const [editAuthHeader, setEditAuthHeader] = useState('');
 
   useEffect(() => {
     if (open) {
       setStyleUrlDraft(styleUrl);
+    } else {
+      setEditingOverlayId(null);
     }
   }, [open, styleUrl]);
 
@@ -75,6 +91,28 @@ export function SettingsDialog({
       setNewOverlayName('');
       setNewOverlayUrl('');
       setNewOverlayAuthHeader('');
+    }
+  };
+
+  const startEditOverlay = (overlay: Overlay) => {
+    setEditingOverlayId(overlay.id);
+    setEditName(overlay.name);
+    setEditTilesUrl(overlay.tiles.join(', '));
+    setEditAuthHeader(overlay.authorizationHeader ?? '');
+  };
+
+  const cancelEditOverlay = () => {
+    setEditingOverlayId(null);
+  };
+
+  const handleEditOverlaySubmit = (event: FormEvent, id: string) => {
+    event.preventDefault();
+    const name = editName.trim();
+    const tilesUrl = editTilesUrl.trim();
+    const authorizationHeader = editAuthHeader.trim();
+    if (name && tilesUrl) {
+      onEditOverlay(id, name, tilesUrl, authorizationHeader || undefined);
+      setEditingOverlayId(null);
     }
   };
 
@@ -114,36 +152,127 @@ export function SettingsDialog({
               </Typography>
             ) : (
               <List dense disablePadding>
-                {overlays.map((overlay) => (
-                  <ListItem
-                    key={overlay.id}
-                    disablePadding
-                    secondaryAction={
-                      <IconButton
-                        edge="end"
-                        aria-label={`Remove ${overlay.name}`}
-                        onClick={() => onRemoveOverlay(overlay.id)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    }
-                  >
-                    <ListItemButton
-                      dense
-                      onClick={() => onToggleOverlay(overlay.id)}
+                {overlays.map((overlay) =>
+                  editingOverlayId === overlay.id ? (
+                    <ListItem
+                      key={overlay.id}
+                      disablePadding
+                      sx={{ display: 'block', py: 1 }}
                     >
-                      <ListItemIcon sx={{ minWidth: 0 }}>
-                        <Checkbox
-                          edge="start"
-                          tabIndex={-1}
-                          disableRipple
-                          checked={overlay.enabled}
-                        />
-                      </ListItemIcon>
-                      <ListItemText primary={overlay.name} />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
+                      <Stack
+                        component="form"
+                        spacing={1}
+                        onSubmit={(event) =>
+                          handleEditOverlaySubmit(event, overlay.id)
+                        }
+                      >
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={1}
+                        >
+                          <TextField
+                            label="Name"
+                            size="small"
+                            autoFocus
+                            value={editName}
+                            onChange={(event) =>
+                              setEditName(event.target.value)
+                            }
+                          />
+                          <TextField
+                            label="Tile URL template(s)"
+                            size="small"
+                            fullWidth
+                            value={editTilesUrl}
+                            onChange={(event) =>
+                              setEditTilesUrl(event.target.value)
+                            }
+                            placeholder="https://example.com/{z}/{x}/{y}.png"
+                            helperText="Comma-separate multiple URLs"
+                          />
+                        </Stack>
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={1}
+                        >
+                          <TextField
+                            label="Authorization header (optional)"
+                            size="small"
+                            fullWidth
+                            value={editAuthHeader}
+                            onChange={(event) =>
+                              setEditAuthHeader(event.target.value)
+                            }
+                            placeholder="Bearer <token>"
+                          />
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                              alignSelf: { xs: 'flex-start', sm: 'center' },
+                            }}
+                          >
+                            <Button
+                              type="submit"
+                              variant="outlined"
+                              size="small"
+                              startIcon={<SaveIcon fontSize="small" />}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              variant="text"
+                              size="small"
+                              onClick={cancelEditOverlay}
+                              startIcon={<CloseIcon fontSize="small" />}
+                            >
+                              Cancel
+                            </Button>
+                          </Stack>
+                        </Stack>
+                      </Stack>
+                    </ListItem>
+                  ) : (
+                    <ListItem
+                      key={overlay.id}
+                      disablePadding
+                      sx={{ pr: 9 }}
+                      secondaryAction={
+                        <Stack direction="row" spacing={0.5}>
+                          <IconButton
+                            edge="end"
+                            aria-label={`Edit ${overlay.name}`}
+                            onClick={() => startEditOverlay(overlay)}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            edge="end"
+                            aria-label={`Remove ${overlay.name}`}
+                            onClick={() => onRemoveOverlay(overlay.id)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      }
+                    >
+                      <ListItemButton
+                        dense
+                        onClick={() => onToggleOverlay(overlay.id)}
+                      >
+                        <ListItemIcon sx={{ minWidth: 0 }}>
+                          <Checkbox
+                            edge="start"
+                            tabIndex={-1}
+                            disableRipple
+                            checked={overlay.enabled}
+                          />
+                        </ListItemIcon>
+                        <ListItemText primary={overlay.name} />
+                      </ListItemButton>
+                    </ListItem>
+                  ),
+                )}
               </List>
             )}
 
