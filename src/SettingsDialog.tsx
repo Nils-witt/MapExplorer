@@ -18,6 +18,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
@@ -44,6 +46,7 @@ interface SettingsDialogProps {
     tilesUrl: string,
     authorizationHeader?: string,
   ) => void;
+  onMoveOverlay: (id: string, direction: 'up' | 'down') => void;
 }
 
 export function SettingsDialog({
@@ -56,6 +59,7 @@ export function SettingsDialog({
   onAddOverlay,
   onRemoveOverlay,
   onEditOverlay,
+  onMoveOverlay,
 }: SettingsDialogProps) {
   const [styleUrlDraft, setStyleUrlDraft] = useState(styleUrl);
   const [newOverlayName, setNewOverlayName] = useState('');
@@ -152,129 +156,151 @@ export function SettingsDialog({
                 No overlays added yet.
               </Typography>
             ) : (
-              <List dense disablePadding>
-                {overlays.map((overlay) =>
-                  editingOverlayId === overlay.id ? (
-                    <ListItem
-                      key={overlay.id}
-                      disablePadding
-                      sx={{ display: 'block', py: 1 }}
-                    >
-                      <Stack
-                        component="form"
-                        spacing={1}
-                        onSubmit={(event) =>
-                          handleEditOverlaySubmit(event, overlay.id)
-                        }
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  Order controls stacking on the map — the top overlay below is
+                  drawn on top.
+                </Typography>
+                <List dense disablePadding>
+                  {overlays.map((overlay, index) =>
+                    editingOverlayId === overlay.id ? (
+                      <ListItem
+                        key={overlay.id}
+                        disablePadding
+                        sx={{ display: 'block', py: 1 }}
                       >
                         <Stack
-                          direction={{ xs: 'column', sm: 'row' }}
+                          component="form"
                           spacing={1}
+                          onSubmit={(event) =>
+                            handleEditOverlaySubmit(event, overlay.id)
+                          }
                         >
-                          <TextField
-                            label="Name"
-                            size="small"
-                            autoFocus
-                            value={editName}
-                            onChange={(event) =>
-                              setEditName(event.target.value)
-                            }
-                          />
-                          <TextField
-                            label="Tile URL template(s)"
-                            size="small"
-                            fullWidth
-                            value={editTilesUrl}
-                            onChange={(event) =>
-                              setEditTilesUrl(event.target.value)
-                            }
-                            placeholder="https://example.com/{z}/{x}/{y}.png"
-                            helperText="Comma-separate multiple URLs"
-                          />
-                        </Stack>
-                        <Stack
-                          direction={{ xs: 'column', sm: 'row' }}
-                          spacing={1}
-                        >
-                          <TextField
-                            label="Authorization header (optional)"
-                            size="small"
-                            fullWidth
-                            value={editAuthHeader}
-                            onChange={(event) =>
-                              setEditAuthHeader(event.target.value)
-                            }
-                            placeholder="Bearer <token>"
-                          />
                           <Stack
-                            direction="row"
+                            direction={{ xs: 'column', sm: 'row' }}
                             spacing={1}
-                            sx={{
-                              alignSelf: { xs: 'flex-start', sm: 'center' },
-                            }}
                           >
-                            <Button
-                              type="submit"
-                              variant="outlined"
+                            <TextField
+                              label="Name"
                               size="small"
-                              startIcon={<SaveIcon fontSize="small" />}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              variant="text"
+                              autoFocus
+                              value={editName}
+                              onChange={(event) =>
+                                setEditName(event.target.value)
+                              }
+                            />
+                            <TextField
+                              label="Tile URL template(s)"
                               size="small"
-                              onClick={cancelEditOverlay}
-                              startIcon={<CloseIcon fontSize="small" />}
+                              fullWidth
+                              value={editTilesUrl}
+                              onChange={(event) =>
+                                setEditTilesUrl(event.target.value)
+                              }
+                              placeholder="https://example.com/{z}/{x}/{y}.png"
+                              helperText="Comma-separate multiple URLs"
+                            />
+                          </Stack>
+                          <Stack
+                            direction={{ xs: 'column', sm: 'row' }}
+                            spacing={1}
+                          >
+                            <TextField
+                              label="Authorization header (optional)"
+                              size="small"
+                              fullWidth
+                              value={editAuthHeader}
+                              onChange={(event) =>
+                                setEditAuthHeader(event.target.value)
+                              }
+                              placeholder="Bearer <token>"
+                            />
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              sx={{
+                                alignSelf: { xs: 'flex-start', sm: 'center' },
+                              }}
                             >
-                              Cancel
-                            </Button>
+                              <Button
+                                type="submit"
+                                variant="outlined"
+                                size="small"
+                                startIcon={<SaveIcon fontSize="small" />}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                variant="text"
+                                size="small"
+                                onClick={cancelEditOverlay}
+                                startIcon={<CloseIcon fontSize="small" />}
+                              >
+                                Cancel
+                              </Button>
+                            </Stack>
                           </Stack>
                         </Stack>
-                      </Stack>
-                    </ListItem>
-                  ) : (
-                    <ListItem
-                      key={overlay.id}
-                      disablePadding
-                      sx={{ pr: 9 }}
-                      secondaryAction={
-                        <Stack direction="row" spacing={0.5}>
-                          <IconButton
-                            edge="end"
-                            aria-label={`Edit ${overlay.name}`}
-                            onClick={() => startEditOverlay(overlay)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            edge="end"
-                            aria-label={`Remove ${overlay.name}`}
-                            onClick={() => onRemoveOverlay(overlay.id)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
-                      }
-                    >
-                      <ListItemButton
-                        dense
-                        onClick={() => onToggleOverlay(overlay.id)}
+                      </ListItem>
+                    ) : (
+                      <ListItem
+                        key={overlay.id}
+                        disablePadding
+                        sx={{ pr: 17 }}
+                        secondaryAction={
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton
+                              edge="end"
+                              aria-label={`Move ${overlay.name} up`}
+                              disabled={index === 0}
+                              onClick={() => onMoveOverlay(overlay.id, 'up')}
+                            >
+                              <ArrowUpwardIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              edge="end"
+                              aria-label={`Move ${overlay.name} down`}
+                              disabled={index === overlays.length - 1}
+                              onClick={() => onMoveOverlay(overlay.id, 'down')}
+                            >
+                              <ArrowDownwardIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              edge="end"
+                              aria-label={`Edit ${overlay.name}`}
+                              onClick={() => startEditOverlay(overlay)}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              edge="end"
+                              aria-label={`Remove ${overlay.name}`}
+                              onClick={() => onRemoveOverlay(overlay.id)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        }
                       >
-                        <ListItemIcon sx={{ minWidth: 0 }}>
-                          <Checkbox
-                            edge="start"
-                            tabIndex={-1}
-                            disableRipple
-                            checked={overlay.enabled}
-                          />
-                        </ListItemIcon>
-                        <ListItemText primary={overlay.name} />
-                      </ListItemButton>
-                    </ListItem>
-                  ),
-                )}
-              </List>
+                        <ListItemButton
+                          dense
+                          onClick={() => onToggleOverlay(overlay.id)}
+                        >
+                          <ListItemIcon sx={{ minWidth: 0 }}>
+                            <Checkbox
+                              edge="start"
+                              tabIndex={-1}
+                              disableRipple
+                              checked={overlay.enabled}
+                            />
+                          </ListItemIcon>
+                          <ListItemText primary={overlay.name} />
+                        </ListItemButton>
+                      </ListItem>
+                    ),
+                  )}
+                </List>
+              </>
             )}
 
             <Stack

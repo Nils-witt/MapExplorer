@@ -86,6 +86,19 @@ function applyOverlays(map: MapLibreMap, overlays: Overlay[]) {
       });
     }
   }
+
+  // Enforce stacking order: overlays earlier in the list are drawn on top.
+  // Moving each layer to the top in reverse-list order leaves the first
+  // overlay on top once every layer has been placed.
+  for (const overlay of [...overlays].reverse()) {
+    if (!overlay.enabled) {
+      continue;
+    }
+    const layerId = `${OVERLAY_LAYER_PREFIX}${overlay.id}`;
+    if (map.getLayer(layerId)) {
+      map.moveLayer(layerId);
+    }
+  }
 }
 
 function tileUrlPrefix(template: string): string {
@@ -217,6 +230,19 @@ export function App() {
     setOverlays((prev) => prev.filter((overlay) => overlay.id !== id));
   };
 
+  const handleMoveOverlay = (id: string, direction: 'up' | 'down') => {
+    setOverlays((prev) => {
+      const index = prev.findIndex((overlay) => overlay.id === id);
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (index === -1 || targetIndex < 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+      const next = [...prev];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  };
+
   const handleEditOverlay = (
     id: string,
     name: string,
@@ -254,6 +280,7 @@ export function App() {
         onAddOverlay={handleAddOverlay}
         onRemoveOverlay={handleRemoveOverlay}
         onEditOverlay={handleEditOverlay}
+        onMoveOverlay={handleMoveOverlay}
       />
     </>
   );
