@@ -1,24 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
-  Marker as MapLibreMarker,
-  RequestParameters,
-  ResourceType,
-} from 'maplibre-gl';
+  MapLayerMouseEvent,
+  MapRef,
+  MarkerDragEvent,
+  ViewStateChangeEvent,
+} from '@vis.gl/react-maplibre';
 import {
   GeolocateControl,
-  Map as MapLibreMap,
+  Layer,
+  Map,
+  Marker,
   NavigationControl,
-  setWorkerUrl,
-} from 'maplibre-gl';
+  Source,
+} from '@vis.gl/react-maplibre';
+import type { RequestParameters, ResourceType } from 'maplibre-gl';
+import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { SettingsDialog } from './SettingsDialog';
-import { SettingsControl } from './SettingsControl';
-import { MarkerControl } from './MarkerControl';
-import { MarkersListControl } from './MarkersListControl';
+import {
+  AddMarkerButtonControl,
+  MarkersListButtonControl,
+  SettingsButtonControl,
+} from './MapControls';
 import { MarkersDialog } from './MarkersDialog';
 import type { LocalMarker, Overlay } from './types';
-import { applyOverlays, findAuthorizationHeader } from './overlayMap';
-import { syncMarkers } from './markers';
+import {
+  DEFAULT_OVERLAY_OPACITY,
+  OVERLAY_LAYER_PREFIX,
+  OVERLAY_SOURCE_PREFIX,
+  findAuthorizationHeader,
+} from './overlayMap';
 import {
   applyConfig,
   loadMapPosition,
@@ -30,6 +41,7 @@ import {
   saveOverlays,
   saveStyleUrl,
 } from './storage';
+import PlaceIcon from '@mui/icons-material/Place';
 
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
@@ -47,14 +59,8 @@ const DEFAULT_MAP_POSITION = {
 };
 
 export function App() {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
+  const mapRef = useRef<MapRef | null>(null);
   const overlaysRef = useRef<Overlay[]>([]);
-  const isFirstStyleRender = useRef(true);
-  const markerControlRef = useRef<MarkerControl | null>(null);
-  const markerInstancesRef = useRef<Map<string, MapLibreMarker>>(new Map());
-  const addingMarkerRef = useRef(false);
-  const pendingFocusMarkerIdRef = useRef<string | null>(null);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [markersDialogOpen, setMarkersDialogOpen] = useState(false);
@@ -63,7 +69,11 @@ export function App() {
   );
   const [overlays, setOverlays] = useState<Overlay[]>(loadOverlays);
   const [markers, setMarkers] = useState<LocalMarker[]>(loadMarkers);
-  const [addingMarker, setAddingMarkerState] = useState(false);
+  const [addingMarker, setAddingMarker] = useState(false);
+  const [initialPosition] = useState(
+    () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
+  );
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -93,134 +103,20 @@ export function App() {
     saveMarkers(markers);
   }, [markers]);
 
-  const setAddingMarker = (value: boolean) => {
-    addingMarkerRef.current = value;
-    setAddingMarkerState(value);
-    markerControlRef.current?.setActive(value);
-    const map = mapRef.current;
-    if (map) {
-      map.getCanvas().style.cursor = value ? 'crosshair' : '';
+  const handleMapClick = (event: MapLayerMouseEvent) => {
+    if (!addingMarker) {
+      return;
     }
+    const { lng, lat } = event.lngLat;
+    const id = `marker-${Date.now()}`;
+    setMarkers((prev) => [...prev, { id, lng, lat, name: 'New marker' }]);
+    setAddingMarker(false);
   };
 
-  useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) {
-      return;
-    }
-
-    const initialPosition = loadMapPosition() ?? DEFAULT_MAP_POSITION;
-    const markerInstances = markerInstancesRef.current;
-
-    const map = new MapLibreMap({
-      container: mapContainerRef.current,
-      style: styleUrl,
-      center: initialPosition.center,
-      zoom: initialPosition.zoom,
-      bearing: initialPosition.bearing,
-      pitch: initialPosition.pitch,
-      transformRequest: (
-        url: string,
-        _resourceType?: ResourceType,
-      ): RequestParameters | undefined => {
-        const authorizationHeader = findAuthorizationHeader(
-          url,
-          overlaysRef.current,
-        );
-        if (!authorizationHeader) {
-          return undefined;
-        }
-        return { url, headers: { Authorization: authorizationHeader } };
-      },
-    });
-
-    map.addControl(new NavigationControl(), 'top-left');
-    map.addControl(
-      new SettingsControl(() => setSettingsOpen(true)),
-      'top-right',
-    );
-    const markerControl = new MarkerControl(() =>
-      setAddingMarker(!addingMarkerRef.current),
-    );
-    markerControlRef.current = markerControl;
-    map.addControl(markerControl, 'top-left');
-    map.addControl(
-      new MarkersListControl(() => setMarkersDialogOpen(true)),
-      'top-left',
-    );
-    map.addControl(
-      new GeolocateControl({
-        positionOptions: {
-          enableHighAccuracy: true,
-        },
-        trackUserLocation: true,
-      }),
-      'top-left',
-    );
-    map.on('style.load', () => applyOverlays(map, overlaysRef.current));
-    map.on('moveend', () => {
-      const center = map.getCenter();
-      saveMapPosition({
-        center: [center.lng, center.lat],
-        zoom: map.getZoom(),
-        bearing: map.getBearing(),
-        pitch: map.getPitch(),
-      });
-    });
-    map.on('click', (event) => {
-      if (!addingMarkerRef.current) {
-        return;
-      }
-      const { lng, lat } = event.lngLat;
-      const id = `marker-${Date.now()}`;
-      pendingFocusMarkerIdRef.current = id;
-      setMarkers((prev) => [...prev, { id, lng, lat, name: 'New marker' }]);
-      setAddingMarker(false);
-    });
-
-    mapRef.current = map;
-
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      markerInstances.clear();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (isFirstStyleRender.current) {
-      isFirstStyleRender.current = false;
-      return;
-    }
-    mapRef.current?.setStyle(styleUrl);
-  }, [styleUrl]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (map?.isStyleLoaded()) {
-      applyOverlays(map, overlays);
-    }
-  }, [overlays]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) {
-      return;
-    }
-    syncMarkers(
-      map,
-      markers,
-      markerInstancesRef.current,
-      {
-        onRename: handleRenameMarker,
-        onRemove: handleRemoveMarker,
-        onMove: handleMoveMarker,
-      },
-      pendingFocusMarkerIdRef.current,
-    );
-    pendingFocusMarkerIdRef.current = null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markers]);
+  const handleMoveEnd = (event: ViewStateChangeEvent) => {
+    const { longitude, latitude, zoom, bearing, pitch } = event.viewState;
+    saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });
+  };
 
   const handleToggleOverlay = (id: string) => {
     setOverlays((prev) =>
@@ -316,6 +212,7 @@ export function App() {
 
   const handleLocateMarker = (id: string) => {
     const marker = markers.find((candidate) => candidate.id === id);
+    setSelectedMarkerId(id);
     const map = mapRef.current;
     if (!marker || !map) {
       return;
@@ -324,15 +221,87 @@ export function App() {
       center: [marker.lng, marker.lat],
       zoom: Math.max(map.getZoom(), 14),
     });
-    const instance = markerInstancesRef.current.get(id);
-    if (instance && !instance.getPopup()?.isOpen()) {
-      instance.togglePopup();
-    }
   };
 
   return (
     <>
-      <div ref={mapContainerRef} className="map" />
+      <Map
+        ref={mapRef}
+        initialViewState={{
+          longitude: initialPosition.center[0],
+          latitude: initialPosition.center[1],
+          zoom: initialPosition.zoom,
+          bearing: initialPosition.bearing,
+          pitch: initialPosition.pitch,
+        }}
+        mapStyle={styleUrl}
+        cursor={addingMarker ? 'crosshair' : undefined}
+        style={{ position: 'absolute', inset: 0 }}
+        transformRequest={(
+          url: string,
+          _resourceType?: ResourceType,
+        ): RequestParameters | undefined => {
+          const authorizationHeader = findAuthorizationHeader(
+            url,
+            overlaysRef.current,
+          );
+          if (!authorizationHeader) {
+            return undefined;
+          }
+          return { url, headers: { Authorization: authorizationHeader } };
+        }}
+        onClick={handleMapClick}
+        onMoveEnd={handleMoveEnd}
+      >
+        <NavigationControl position="top-left" />
+        <AddMarkerButtonControl
+          active={addingMarker}
+          onToggle={() => setAddingMarker((prev) => !prev)}
+        />
+        <MarkersListButtonControl onOpen={() => setMarkersDialogOpen(true)} />
+        <GeolocateControl
+          position="top-left"
+          positionOptions={{ enableHighAccuracy: true }}
+          trackUserLocation
+        />
+        <SettingsButtonControl onOpen={() => setSettingsOpen(true)} />
+        {[...overlays]
+          .reverse()
+          .filter((overlay) => overlay.enabled)
+          .map((overlay) => (
+            <Source
+              key={overlay.id}
+              id={`${OVERLAY_SOURCE_PREFIX}${overlay.id}`}
+              type="raster"
+              tiles={overlay.tiles}
+              tileSize={256}
+            >
+              <Layer
+                id={`${OVERLAY_LAYER_PREFIX}${overlay.id}`}
+                type="raster"
+                paint={{
+                  'raster-opacity': overlay.opacity ?? DEFAULT_OVERLAY_OPACITY,
+                }}
+              />
+            </Source>
+          ))}
+        {markers.map((marker) => (
+          <Marker
+            key={marker.id}
+            longitude={marker.lng}
+            latitude={marker.lat}
+            draggable
+            onDragEnd={(event: MarkerDragEvent) =>
+              handleMoveMarker(marker.id, event.lngLat.lng, event.lngLat.lat)
+            }
+          >
+            <PlaceIcon
+              color={selectedMarkerId === marker.id ? 'error' : 'primary'}
+              fontSize="large"
+            />
+          </Marker>
+        ))}
+      </Map>
       {addingMarker ? (
         <div className="marker-hint">Click the map to place a marker</div>
       ) : null}

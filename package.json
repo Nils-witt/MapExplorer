@@ -40,6 +40,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.3.0",
     "@mui/material": "^9.3.0",
+    "@vis.gl/react-maplibre": "^8.1.2",
     "maplibre-gl": "^6.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
