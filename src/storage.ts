@@ -27,6 +27,27 @@ function writeValue(key: string, value: string): void {
   }
 }
 
+export function applyConfig(config: {
+  defaultStyleUrl?: string;
+  defaultOverlaysServer?: string;
+}): void {
+  let modified = false;
+  if (config.defaultStyleUrl && config.defaultStyleUrl !== loadStyleUrl('')) {
+    saveStyleUrl(config.defaultStyleUrl);
+    modified = true;
+  }
+  if (
+    config.defaultOverlaysServer &&
+    config.defaultOverlaysServer !== loadServerBaseUrl('')
+  ) {
+    saveServerBaseUrl(config.defaultOverlaysServer);
+    modified = true;
+  }
+  if (modified) {
+    window.location.reload();
+  }
+}
+
 export function loadStyleUrl(defaultStyleUrl: string): string {
   return readValue(STYLE_URL_STORAGE_KEY, defaultStyleUrl);
 }

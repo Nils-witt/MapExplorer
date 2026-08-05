@@ -11,6 +11,7 @@ import { SettingsControl } from './SettingsControl';
 import type { Overlay } from './types';
 import { applyOverlays, findAuthorizationHeader } from './overlayMap';
 import {
+  applyConfig,
   loadMapPosition,
   loadOverlays,
   loadStyleUrl,
@@ -41,6 +42,17 @@ export function App() {
     loadStyleUrl(DEFAULT_STYLE_URL),
   );
   const [overlays, setOverlays] = useState<Overlay[]>(loadOverlays);
+
+  useEffect(() => {
+    fetch('/config.json')
+      .then((response) => response.json())
+      .then((config) => {
+        applyConfig(config);
+      })
+      .catch((error) => {
+        console.error('Failed to load config.json:', error);
+      });
+  }, [overlays]);
 
   useEffect(() => {
     overlaysRef.current = overlays;
