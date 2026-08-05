@@ -13,6 +13,20 @@ body,
   height: 100%;
 }
 
+.copyright {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  z-index: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.7);
+  color: #333;
+  font-size: 11px;
+  font-family: sans-serif;
+  pointer-events: none;
+}
+
 .maplibregl-ctrl-settings {
   display: flex;
   align-items: center;

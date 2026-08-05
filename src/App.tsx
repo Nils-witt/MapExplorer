@@ -227,6 +227,7 @@ export function App() {
   return (
     <>
       <div ref={mapContainerRef} className="map" />
+      <div className="copyright">© 2026 Nils Witt</div>
       <SettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
