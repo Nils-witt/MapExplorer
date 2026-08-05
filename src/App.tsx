@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
-import { Map as MapLibreMap, NavigationControl } from 'maplibre-gl';
+import {
+  GeolocateControl,
+  Map as MapLibreMap,
+  NavigationControl,
+} from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { SettingsDialog } from './SettingsDialog';
 import { SettingsControl } from './SettingsControl';
@@ -67,6 +71,15 @@ export function App() {
     map.addControl(
       new SettingsControl(() => setSettingsOpen(true)),
       'top-right',
+    );
+    map.addControl(
+      new GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true,
+        },
+        trackUserLocation: true,
+      }),
+      'top-left',
     );
     map.on('style.load', () => applyOverlays(map, overlaysRef.current));
 
