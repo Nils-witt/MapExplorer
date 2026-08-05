@@ -1,10 +1,11 @@
-import type { Overlay } from './types';
+import type { MapPosition, Overlay } from './types';
 
 const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
 const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';
 const SERVER_URL_STORAGE_KEY = 'mapexplorer.serverBaseUrl';
 const SERVER_USERNAME_STORAGE_KEY = 'mapexplorer.serverUsername';
 const SERVER_TOKEN_STORAGE_KEY = 'mapexplorer.serverToken';
+const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 
 function readValue(key: string, fallback = ''): string {
   try {
@@ -73,4 +74,37 @@ export function loadServerToken(): string {
 
 export function saveServerToken(token: string): void {
   writeValue(SERVER_TOKEN_STORAGE_KEY, token);
+}
+
+function isMapPosition(value: unknown): value is MapPosition {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    Array.isArray(candidate.center) &&
+    candidate.center.length === 2 &&
+    typeof candidate.center[0] === 'number' &&
+    typeof candidate.center[1] === 'number' &&
+    typeof candidate.zoom === 'number' &&
+    typeof candidate.bearing === 'number' &&
+    typeof candidate.pitch === 'number'
+  );
+}
+
+export function loadMapPosition(): MapPosition | null {
+  const stored = readValue(MAP_POSITION_STORAGE_KEY);
+  if (!stored) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    return isMapPosition(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveMapPosition(position: MapPosition): void {
+  writeValue(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
 }

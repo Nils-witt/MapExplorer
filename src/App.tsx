@@ -11,8 +11,10 @@ import { SettingsControl } from './SettingsControl';
 import type { Overlay } from './types';
 import { applyOverlays, findAuthorizationHeader } from './overlayMap';
 import {
+  loadMapPosition,
   loadOverlays,
   loadStyleUrl,
+  saveMapPosition,
   saveOverlays,
   saveStyleUrl,
 } from './storage';
@@ -20,6 +22,13 @@ import {
 const DEFAULT_STYLE_URL =
   import.meta.env.VITE_DEFAULT_STYLE_URL ??
   'https://demotiles.maplibre.org/style.json';
+
+const DEFAULT_MAP_POSITION = {
+  center: [7.09, 50.73] as [number, number],
+  zoom: 10,
+  bearing: 0,
+  pitch: 0,
+};
 
 export function App() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -47,11 +56,15 @@ export function App() {
       return;
     }
 
+    const initialPosition = loadMapPosition() ?? DEFAULT_MAP_POSITION;
+
     const map = new MapLibreMap({
       container: mapContainerRef.current,
       style: styleUrl,
-      center: [7.09, 50.73],
-      zoom: 10,
+      center: initialPosition.center,
+      zoom: initialPosition.zoom,
+      bearing: initialPosition.bearing,
+      pitch: initialPosition.pitch,
       transformRequest: (
         url: string,
         _resourceType?: ResourceType,
@@ -82,6 +95,15 @@ export function App() {
       'top-left',
     );
     map.on('style.load', () => applyOverlays(map, overlaysRef.current));
+    map.on('moveend', () => {
+      const center = map.getCenter();
+      saveMapPosition({
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      });
+    });
 
     mapRef.current = map;
 

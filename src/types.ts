@@ -6,3 +6,10 @@ export interface Overlay {
   authorizationHeader?: string;
   opacity?: number;
 }
+
+export interface MapPosition {
+  center: [number, number];
+  zoom: number;
+  bearing: number;
+  pitch: number;
+}
