@@ -41,9 +41,34 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/config\.json/],
         runtimeCaching: [
           {
+            // Raster/vector map tiles, e.g. .../{z}/{x}/{y}.png or .../{z}/{x}/{y}.pbf
+            // A plain RegExp route only matches cross-origin URLs when the
+            // match starts at index 0, which tile URLs never do - so this
+            // must be a function matcher instead of a bare RegExp.
+            urlPattern: ({ url }) =>
+              /\/\d{1,2}\/\d{1,8}\/\d{1,8}(\.[a-zA-Z0-9]+)?(\?.*)?$/.test(
+                url.href,
+              ),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'map-tiles-cache',
+              expiration: {
+                maxEntries: 4000,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
             // Map style documents, sprites and glyphs (fonts) for MapLibre styles
-            urlPattern: ({ sameOrigin }) => !sameOrigin,
-            handler: 'NetworkFirst',
+            urlPattern: ({ url, sameOrigin }) =>
+              !sameOrigin &&
+              (url.pathname.endsWith('.json') ||
+                url.pathname.includes('sprite') ||
+                /\/fonts\//.test(url.pathname)),
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'map-style-cache',
               expiration: {
