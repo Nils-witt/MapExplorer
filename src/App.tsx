@@ -4,6 +4,7 @@ import {
   GeolocateControl,
   Map as MapLibreMap,
   NavigationControl,
+  setWorkerUrl,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { SettingsDialog } from './SettingsDialog';
@@ -19,6 +20,10 @@ import {
   saveOverlays,
   saveStyleUrl,
 } from './storage';
+
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
+setWorkerUrl(workerUrl);
 
 const DEFAULT_STYLE_URL =
   import.meta.env.VITE_DEFAULT_STYLE_URL ??
@@ -44,14 +49,18 @@ export function App() {
   const [overlays, setOverlays] = useState<Overlay[]>(loadOverlays);
 
   useEffect(() => {
-    fetch('/config.json')
-      .then((response) => response.json())
-      .then((config) => {
-        applyConfig(config);
-      })
-      .catch((error) => {
-        console.error('Failed to load config.json:', error);
-      });
+    try {
+      fetch('/config.json')
+        .then((response) => response.json())
+        .then((config) => {
+          applyConfig(config);
+        })
+        .catch((error) => {
+          console.log('Failed to load config.json:', error);
+        });
+    } catch (error) {
+      console.log('Failed to load config.json:', error);
+    }
   }, []);
 
   useEffect(() => {
