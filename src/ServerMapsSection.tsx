@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -24,14 +24,17 @@ import {
   login,
   listMaps,
   overlayIdForMap,
+  refreshAccessToken,
   tileUrlForMap,
   ServerApiError,
 } from './serverApi';
 import {
   loadServerBaseUrl,
+  loadServerRefreshToken,
   loadServerToken,
   loadServerUsername,
   saveServerBaseUrl,
+  saveServerRefreshToken,
   saveServerToken,
   saveServerUsername,
 } from './storage';
@@ -64,19 +67,80 @@ export function ServerMapsSection({
   const [username, setUsername] = useState(loadServerUsername);
   const [password, setPassword] = useState('');
   const [token, setToken] = useState(loadServerToken);
+  const [refreshToken, setRefreshToken] = useState(loadServerRefreshToken);
   const [maps, setMaps] = useState<ServerMap[] | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [loadingMaps, setLoadingMaps] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMaps = async (activeToken: string) => {
+  // Mirrors of the token state, readable synchronously right after a write.
+  // State setters don't apply until the next render, but callWithAuth needs
+  // the value it just refreshed within the same call.
+  const tokenRef = useRef(token);
+  const refreshTokenRef = useRef(refreshToken);
+
+  const applyTokens = (newToken: string, newRefreshToken: string) => {
+    tokenRef.current = newToken;
+    refreshTokenRef.current = newRefreshToken;
+    setToken(newToken);
+    setRefreshToken(newRefreshToken);
+    saveServerToken(newToken);
+    saveServerRefreshToken(newRefreshToken);
+  };
+
+  const clearSession = () => {
+    tokenRef.current = '';
+    refreshTokenRef.current = '';
+    setToken('');
+    setRefreshToken('');
+    setMaps(null);
+    saveServerToken('');
+    saveServerRefreshToken('');
+  };
+
+  // Runs `call` with the current token; if the token turned out to be
+  // expired, redeems the (single-use) refresh token for a new pair and
+  // retries once before giving up and forcing a full re-login.
+  const callWithAuth = async <T,>(
+    call: (activeToken: string) => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await call(tokenRef.current);
+    } catch (err) {
+      if (!(err instanceof ServerApiError) || err.status !== 401) {
+        throw err;
+      }
+      if (!refreshTokenRef.current) {
+        clearSession();
+        throw err;
+      }
+      let refreshed;
+      try {
+        refreshed = await refreshAccessToken(
+          serverUrl,
+          refreshTokenRef.current,
+        );
+      } catch {
+        clearSession();
+        throw err;
+      }
+      applyTokens(refreshed.token, refreshed.refreshToken);
+      return call(refreshed.token);
+    }
+  };
+
+  const fetchMaps = async () => {
     setLoadingMaps(true);
     setError(null);
     try {
-      setMaps(await listMaps(serverUrl, activeToken));
+      setMaps(await callWithAuth((t) => listMaps(serverUrl, t)));
     } catch (err) {
       if (err instanceof ServerApiError) {
-        setError(err.message);
+        setError(
+          err.status === 401
+            ? 'Session expired. Please sign in again.'
+            : err.message,
+        );
       } else {
         setError('Failed to load maps from server.');
       }
@@ -88,7 +152,7 @@ export function ServerMapsSection({
 
   useEffect(() => {
     if (token) {
-      fetchMaps(token);
+      fetchMaps();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -99,14 +163,13 @@ export function ServerMapsSection({
     setSigningIn(true);
     setError(null);
     try {
-      const newToken = await login(trimmedUrl, username.trim(), password);
+      const tokens = await login(trimmedUrl, username.trim(), password);
       setServerUrl(trimmedUrl);
-      setToken(newToken);
       setPassword('');
       saveServerBaseUrl(trimmedUrl);
       saveServerUsername(username.trim());
-      saveServerToken(newToken);
-      await fetchMaps(newToken);
+      applyTokens(tokens.token, tokens.refreshToken);
+      await fetchMaps();
     } catch (err) {
       if (err instanceof ServerApiError) {
         setError(err.message);
@@ -119,10 +182,8 @@ export function ServerMapsSection({
   };
 
   const handleSignOut = () => {
-    setToken('');
-    setMaps(null);
+    clearSession();
     setError(null);
-    saveServerToken('');
   };
 
   const handleToggleMap = (map: ServerMap) => {
@@ -142,6 +203,20 @@ export function ServerMapsSection({
       tileUrlForMap(serverUrl, map),
       `Bearer ${token}`,
     );
+  };
+
+  const outOfSyncMaps = (maps ?? []).filter((map) => {
+    const existing = overlays.find(
+      (overlay) => overlay.id === overlayIdForMap(map),
+    );
+    return (
+      existing !== undefined &&
+      existing.authorizationHeader !== `Bearer ${token}`
+    );
+  });
+
+  const handleResyncAll = () => {
+    outOfSyncMaps.forEach(handleResync);
   };
 
   if (!token) {
@@ -201,11 +276,23 @@ export function ServerMapsSection({
       >
         <Typography variant="subtitle1">Server maps</Typography>
         <Stack direction="row" spacing={0.5}>
+          {outOfSyncMaps.length > 0 ? (
+            <Tooltip title="Override authorization header on all overlays with the current token">
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<SyncIcon fontSize="small" />}
+                onClick={handleResyncAll}
+              >
+                Update tokens ({outOfSyncMaps.length})
+              </Button>
+            </Tooltip>
+          ) : null}
           <Tooltip title="Refresh map list">
             <span>
               <IconButton
                 size="small"
-                onClick={() => fetchMaps(token)}
+                onClick={() => fetchMaps()}
                 disabled={loadingMaps}
               >
                 <RefreshIcon fontSize="small" />

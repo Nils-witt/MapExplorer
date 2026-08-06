@@ -8,7 +8,19 @@ export interface ServerMap {
   anonymousAllowed: boolean;
 }
 
-export class ServerApiError extends Error {}
+export class ServerApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export interface AuthTokens {
+  token: string;
+  refreshToken: string;
+}
 
 async function readErrorMessage(response: Response): Promise<string> {
   const text = await response.text();
@@ -23,17 +35,39 @@ export async function login(
   baseUrl: string,
   username: string,
   password: string,
-): Promise<string> {
+): Promise<AuthTokens> {
   const response = await fetch(`${normalizeBaseUrl(baseUrl)}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
   if (!response.ok) {
-    throw new ServerApiError(await readErrorMessage(response));
+    throw new ServerApiError(await readErrorMessage(response), response.status);
   }
-  const data = (await response.json()) as { token: string };
-  return data.token;
+  const data = (await response.json()) as {
+    token: string;
+    refresh_token: string;
+  };
+  return { token: data.token, refreshToken: data.refresh_token };
+}
+
+export async function refreshAccessToken(
+  baseUrl: string,
+  refreshToken: string,
+): Promise<AuthTokens> {
+  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!response.ok) {
+    throw new ServerApiError(await readErrorMessage(response), response.status);
+  }
+  const data = (await response.json()) as {
+    token: string;
+    refresh_token: string;
+  };
+  return { token: data.token, refreshToken: data.refresh_token };
 }
 
 export async function listMaps(
@@ -44,7 +78,7 @@ export async function listMaps(
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    throw new ServerApiError(await readErrorMessage(response));
+    throw new ServerApiError(await readErrorMessage(response), response.status);
   }
   return (await response.json()) as ServerMap[];
 }

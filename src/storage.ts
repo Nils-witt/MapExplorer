@@ -5,6 +5,7 @@ const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';
 const SERVER_URL_STORAGE_KEY = 'mapexplorer.serverBaseUrl';
 const SERVER_USERNAME_STORAGE_KEY = 'mapexplorer.serverUsername';
 const SERVER_TOKEN_STORAGE_KEY = 'mapexplorer.serverToken';
+const SERVER_REFRESH_TOKEN_STORAGE_KEY = 'mapexplorer.serverRefreshToken';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const MARKERS_STORAGE_KEY = 'mapexplorer.markers';
 
@@ -96,6 +97,14 @@ export function loadServerToken(): string {
 
 export function saveServerToken(token: string): void {
   writeValue(SERVER_TOKEN_STORAGE_KEY, token);
+}
+
+export function loadServerRefreshToken(): string {
+  return readValue(SERVER_REFRESH_TOKEN_STORAGE_KEY);
+}
+
+export function saveServerRefreshToken(refreshToken: string): void {
+  writeValue(SERVER_REFRESH_TOKEN_STORAGE_KEY, refreshToken);
 }
 
 function isMapPosition(value: unknown): value is MapPosition {
