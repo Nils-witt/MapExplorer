@@ -24,16 +24,13 @@ import type { LocalMarker } from './types';
 import { downloadMarkersCsv } from './markers';
 import type { MarkersImportResult } from './markers';
 import { CsvImportDialog } from './CsvImportDialog';
+import { useMarkers } from './MarkersContext';
 
 interface MarkersDialogProps {
   open: boolean;
   onClose: () => void;
-  markers: LocalMarker[];
-  onRename: (id: string, name: string) => void;
-  onRemove: (id: string) => void;
   onRemoveAll: () => void;
   onLocate: (id: string) => void;
-  onImport: (markers: LocalMarker[]) => void;
 }
 
 function formatCoordinate(marker: LocalMarker): string {
@@ -43,13 +40,15 @@ function formatCoordinate(marker: LocalMarker): string {
 export function MarkersDialog({
   open,
   onClose,
-  markers,
-  onRename,
-  onRemove,
   onRemoveAll,
   onLocate,
-  onImport,
 }: MarkersDialogProps) {
+  const {
+    markers,
+    renameMarker: onRename,
+    removeMarker: onRemove,
+    importMarkers: onImport,
+  } = useMarkers();
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [importCsvText, setImportCsvText] = useState<string | null>(null);

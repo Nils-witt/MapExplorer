@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { FormEvent, MouseEvent } from 'react';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Dialog from '@mui/material/Dialog';
@@ -14,6 +14,8 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
@@ -29,7 +31,9 @@ import OpacityIcon from '@mui/icons-material/Opacity';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import type { Overlay } from './types';
 import { DEFAULT_OVERLAY_OPACITY } from './overlayMap';
-import { loadServerToken } from './storage';
+import { useOverlays } from './OverlaysContext';
+import { loadServers, saveServers } from './storage';
+import type { ServerConnection } from './storage';
 import { ServerMapsSection } from './ServerMapsSection';
 
 interface SettingsDialogProps {
@@ -37,22 +41,6 @@ interface SettingsDialogProps {
   onClose: () => void;
   styleUrl: string;
   onApplyStyle: (url: string) => void;
-  overlays: Overlay[];
-  onToggleOverlay: (id: string) => void;
-  onAddOverlay: (
-    name: string,
-    tilesUrl: string,
-    authorizationHeader?: string,
-  ) => void;
-  onChangeOverlayOpacity: (id: string, opacity: number) => void;
-  onRemoveOverlay: (id: string) => void;
-  onEditOverlay: (
-    id: string,
-    name: string,
-    tilesUrl: string,
-    authorizationHeader?: string,
-  ) => void;
-  onMoveOverlay: (id: string, direction: 'up' | 'down') => void;
 }
 
 export function SettingsDialog({
@@ -60,14 +48,16 @@ export function SettingsDialog({
   onClose,
   styleUrl,
   onApplyStyle,
-  overlays,
-  onToggleOverlay,
-  onAddOverlay,
-  onChangeOverlayOpacity,
-  onRemoveOverlay,
-  onEditOverlay,
-  onMoveOverlay,
 }: SettingsDialogProps) {
+  const {
+    overlays,
+    toggleOverlay: onToggleOverlay,
+    addOverlay: onAddOverlay,
+    changeOverlayOpacity: onChangeOverlayOpacity,
+    removeOverlay: onRemoveOverlay,
+    editOverlay: onEditOverlay,
+    moveOverlay: onMoveOverlay,
+  } = useOverlays();
   const [styleUrlDraft, setStyleUrlDraft] = useState(styleUrl);
   const [newOverlayName, setNewOverlayName] = useState('');
   const [newOverlayUrl, setNewOverlayUrl] = useState('');
@@ -77,9 +67,36 @@ export function SettingsDialog({
   const [editTilesUrl, setEditTilesUrl] = useState('');
   const [editAuthHeader, setEditAuthHeader] = useState('');
 
-  // Read fresh on every render (not cached in state) so it reflects a
-  // sign-in that just happened in the Server maps section below.
-  const serverToken = loadServerToken();
+  // Servers live in IndexedDB, so they're loaded once here and shared with
+  // ServerMapsSection as state - that way a sign-in there is immediately
+  // reflected in signedInServers below without re-reading storage.
+  const [servers, setServers] = useState<ServerConnection[]>([]);
+  const serversLoadedRef = useRef(false);
+  const signedInServers = servers.filter((server) => server.token);
+  const [tokenMenu, setTokenMenu] = useState<{
+    anchorEl: HTMLElement;
+    target: 'new' | 'edit';
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadServers().then((loaded) => {
+      if (cancelled) {
+        return;
+      }
+      serversLoadedRef.current = true;
+      setServers(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (serversLoadedRef.current) {
+      saveServers(servers);
+    }
+  }, [servers]);
 
   useEffect(() => {
     if (open) {
@@ -132,12 +149,30 @@ export function SettingsDialog({
     }
   };
 
-  const useServerTokenForNewOverlay = () => {
-    setNewOverlayAuthHeader(`Bearer ${serverToken}`);
+  const applyServerToken = (target: 'new' | 'edit', token: string) => {
+    if (target === 'new') {
+      setNewOverlayAuthHeader(`Bearer ${token}`);
+    } else {
+      setEditAuthHeader(`Bearer ${token}`);
+    }
   };
 
-  const useServerTokenForEditOverlay = () => {
-    setEditAuthHeader(`Bearer ${serverToken}`);
+  const handleUseServerToken = (
+    event: MouseEvent<HTMLElement>,
+    target: 'new' | 'edit',
+  ) => {
+    if (signedInServers.length === 1) {
+      applyServerToken(target, signedInServers[0].token);
+      return;
+    }
+    setTokenMenu({ anchorEl: event.currentTarget, target });
+  };
+
+  const handleSelectServerToken = (token: string) => {
+    if (tokenMenu) {
+      applyServerToken(tokenMenu.target, token);
+    }
+    setTokenMenu(null);
   };
 
   return (
@@ -235,20 +270,26 @@ export function SettingsDialog({
                               placeholder="Bearer <token>"
                               slotProps={{
                                 input: {
-                                  endAdornment: serverToken ? (
-                                    <InputAdornment position="end">
-                                      <Tooltip title="Use current server token">
-                                        <IconButton
-                                          size="small"
-                                          edge="end"
-                                          aria-label="Use current server token"
-                                          onClick={useServerTokenForEditOverlay}
-                                        >
-                                          <VpnKeyIcon fontSize="small" />
-                                        </IconButton>
-                                      </Tooltip>
-                                    </InputAdornment>
-                                  ) : undefined,
+                                  endAdornment:
+                                    signedInServers.length > 0 ? (
+                                      <InputAdornment position="end">
+                                        <Tooltip title="Use server token">
+                                          <IconButton
+                                            size="small"
+                                            edge="end"
+                                            aria-label="Use server token"
+                                            onClick={(event) =>
+                                              handleUseServerToken(
+                                                event,
+                                                'edit',
+                                              )
+                                            }
+                                          >
+                                            <VpnKeyIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </InputAdornment>
+                                    ) : undefined,
                                 },
                               }}
                             />
@@ -405,20 +446,23 @@ export function SettingsDialog({
                   placeholder="Bearer <token>"
                   slotProps={{
                     input: {
-                      endAdornment: serverToken ? (
-                        <InputAdornment position="end">
-                          <Tooltip title="Use current server token">
-                            <IconButton
-                              size="small"
-                              edge="end"
-                              aria-label="Use current server token"
-                              onClick={useServerTokenForNewOverlay}
-                            >
-                              <VpnKeyIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </InputAdornment>
-                      ) : undefined,
+                      endAdornment:
+                        signedInServers.length > 0 ? (
+                          <InputAdornment position="end">
+                            <Tooltip title="Use server token">
+                              <IconButton
+                                size="small"
+                                edge="end"
+                                aria-label="Use server token"
+                                onClick={(event) =>
+                                  handleUseServerToken(event, 'new')
+                                }
+                              >
+                                <VpnKeyIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ) : undefined,
                     },
                   }}
                 />
@@ -436,17 +480,27 @@ export function SettingsDialog({
 
           <Divider />
 
-          <ServerMapsSection
-            overlays={overlays}
-            onAddOverlay={onAddOverlay}
-            onEditOverlay={onEditOverlay}
-            onRemoveOverlay={onRemoveOverlay}
-          />
+          <ServerMapsSection servers={servers} onServersChange={setServers} />
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
+      <Menu
+        anchorEl={tokenMenu?.anchorEl ?? null}
+        open={tokenMenu !== null}
+        onClose={() => setTokenMenu(null)}
+      >
+        {signedInServers.map((server) => (
+          <MenuItem
+            key={server.id}
+            onClick={() => handleSelectServerToken(server.token)}
+          >
+            {server.username ? `${server.username} — ` : ''}
+            {server.baseUrl || 'Server'}
+          </MenuItem>
+        ))}
+      </Menu>
     </Dialog>
   );
 }

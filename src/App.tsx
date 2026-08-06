@@ -23,7 +23,8 @@ import {
   SettingsButtonControl,
 } from './MapControls';
 import { MarkersDialog } from './MarkersDialog';
-import type { LocalMarker, Overlay } from './types';
+import { OverlaysProvider, useOverlays } from './OverlaysContext';
+import { MarkersProvider, useMarkers } from './MarkersContext';
 import {
   DEFAULT_OVERLAY_OPACITY,
   OVERLAY_LAYER_PREFIX,
@@ -33,12 +34,8 @@ import {
 import {
   applyConfig,
   loadMapPosition,
-  loadMarkers,
-  loadOverlays,
   loadStyleUrl,
   saveMapPosition,
-  saveMarkers,
-  saveOverlays,
   saveStyleUrl,
 } from './storage';
 import PlaceIcon from '@mui/icons-material/Place';
@@ -58,17 +55,16 @@ const DEFAULT_MAP_POSITION = {
   pitch: 0,
 };
 
-export function App() {
+function MapView() {
   const mapRef = useRef<MapRef | null>(null);
-  const overlaysRef = useRef<Overlay[]>([]);
+  const { overlays, overlaysRef } = useOverlays();
+  const { markers, addMarker, removeAllMarkers, moveMarker } = useMarkers();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [markersDialogOpen, setMarkersDialogOpen] = useState(false);
   const [styleUrl, setStyleUrl] = useState(() =>
     loadStyleUrl(DEFAULT_STYLE_URL),
   );
-  const [overlays, setOverlays] = useState<Overlay[]>(loadOverlays);
-  const [markers, setMarkers] = useState<LocalMarker[]>(loadMarkers);
   const [addingMarker, setAddingMarker] = useState(false);
   const [initialPosition] = useState(
     () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
@@ -91,25 +87,15 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    overlaysRef.current = overlays;
-    saveOverlays(overlays);
-  }, [overlays]);
-
-  useEffect(() => {
     saveStyleUrl(styleUrl);
   }, [styleUrl]);
-
-  useEffect(() => {
-    saveMarkers(markers);
-  }, [markers]);
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
     if (!addingMarker) {
       return;
     }
     const { lng, lat } = event.lngLat;
-    const id = `marker-${Date.now()}`;
-    setMarkers((prev) => [...prev, { id, lng, lat, name: 'New marker' }]);
+    addMarker(lng, lat);
     setAddingMarker(false);
   };
 
@@ -118,105 +104,9 @@ export function App() {
     saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });
   };
 
-  const handleToggleOverlay = (id: string) => {
-    setOverlays((prev) =>
-      prev.map((overlay) =>
-        overlay.id === id ? { ...overlay, enabled: !overlay.enabled } : overlay,
-      ),
-    );
-  };
-
-  const handleAddOverlay = (
-    name: string,
-    tilesUrl: string,
-    authorizationHeader?: string,
-  ) => {
-    setOverlays((prev) => [
-      ...prev,
-      {
-        id: `custom-${Date.now()}`,
-        name,
-        tiles: [tilesUrl],
-        enabled: true,
-        authorizationHeader: authorizationHeader || undefined,
-      },
-    ]);
-  };
-
-  const handleChangeOverlayOpacity = (id: string, opacity: number) => {
-    setOverlays((prev) =>
-      prev.map((overlay) =>
-        overlay.id === id ? { ...overlay, opacity } : overlay,
-      ),
-    );
-  };
-
-  const handleRemoveOverlay = (id: string) => {
-    setOverlays((prev) => prev.filter((overlay) => overlay.id !== id));
-  };
-
-  const handleMoveOverlay = (id: string, direction: 'up' | 'down') => {
-    setOverlays((prev) => {
-      const index = prev.findIndex((overlay) => overlay.id === id);
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (index === -1 || targetIndex < 0 || targetIndex >= prev.length) {
-        return prev;
-      }
-      const next = [...prev];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return next;
-    });
-  };
-
-  const handleEditOverlay = (
-    id: string,
-    name: string,
-    tilesUrl: string,
-    authorizationHeader?: string,
-  ) => {
-    const tiles = tilesUrl
-      .split(',')
-      .map((tile) => tile.trim())
-      .filter(Boolean);
-    setOverlays((prev) =>
-      prev.map((overlay) =>
-        overlay.id === id
-          ? {
-              ...overlay,
-              name,
-              tiles,
-              authorizationHeader: authorizationHeader || undefined,
-            }
-          : overlay,
-      ),
-    );
-  };
-
-  const handleRenameMarker = (id: string, name: string) => {
-    setMarkers((prev) =>
-      prev.map((marker) => (marker.id === id ? { ...marker, name } : marker)),
-    );
-  };
-
-  const handleRemoveMarker = (id: string) => {
-    setMarkers((prev) => prev.filter((marker) => marker.id !== id));
-  };
-
   const handleRemoveAllMarkers = () => {
-    setMarkers([]);
+    removeAllMarkers();
     setSelectedMarkerId(null);
-  };
-
-  const handleImportMarkers = (imported: LocalMarker[]) => {
-    setMarkers((prev) => [...prev, ...imported]);
-  };
-
-  const handleMoveMarker = (id: string, lng: number, lat: number) => {
-    setMarkers((prev) =>
-      prev.map((marker) =>
-        marker.id === id ? { ...marker, lng, lat } : marker,
-      ),
-    );
   };
 
   const handleLocateMarker = (id: string) => {
@@ -301,7 +191,7 @@ export function App() {
             latitude={marker.lat}
             draggable
             onDragEnd={(event: MarkerDragEvent) =>
-              handleMoveMarker(marker.id, event.lngLat.lng, event.lngLat.lat)
+              moveMarker(marker.id, event.lngLat.lng, event.lngLat.lat)
             }
           >
             <PlaceIcon
@@ -320,24 +210,23 @@ export function App() {
         onClose={() => setSettingsOpen(false)}
         styleUrl={styleUrl}
         onApplyStyle={setStyleUrl}
-        overlays={overlays}
-        onToggleOverlay={handleToggleOverlay}
-        onAddOverlay={handleAddOverlay}
-        onChangeOverlayOpacity={handleChangeOverlayOpacity}
-        onRemoveOverlay={handleRemoveOverlay}
-        onEditOverlay={handleEditOverlay}
-        onMoveOverlay={handleMoveOverlay}
       />
       <MarkersDialog
         open={markersDialogOpen}
         onClose={() => setMarkersDialogOpen(false)}
-        markers={markers}
-        onRename={handleRenameMarker}
-        onRemove={handleRemoveMarker}
         onRemoveAll={handleRemoveAllMarkers}
         onLocate={handleLocateMarker}
-        onImport={handleImportMarkers}
       />
     </>
+  );
+}
+
+export function App() {
+  return (
+    <OverlaysProvider>
+      <MarkersProvider>
+        <MapView />
+      </MarkersProvider>
+    </OverlaysProvider>
   );
 }
