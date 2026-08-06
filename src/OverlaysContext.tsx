@@ -12,12 +12,15 @@ interface OverlaysContextValue {
     name: string,
     tilesUrl: string,
     authorizationHeader?: string,
+    serverId?: string,
+    id?: string,
   ) => void;
   editOverlay: (
     id: string,
     name: string,
     tilesUrl: string,
     authorizationHeader?: string,
+    serverId?: string,
   ) => void;
   removeOverlay: (id: string) => void;
   toggleOverlay: (id: string) => void;
@@ -69,15 +72,18 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     name: string,
     tilesUrl: string,
     authorizationHeader?: string,
+    serverId?: string,
+    id?: string,
   ) => {
     setOverlays((prev) => [
       ...prev,
       {
-        id: `custom-${Date.now()}`,
+        id: id ?? `custom-${Date.now()}`,
         name,
         tiles: [tilesUrl],
         enabled: true,
         authorizationHeader: authorizationHeader || undefined,
+        serverId: serverId || undefined,
       },
     ]);
   };
@@ -112,6 +118,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     name: string,
     tilesUrl: string,
     authorizationHeader?: string,
+    serverId?: string,
   ) => {
     const tiles = tilesUrl
       .split(',')
@@ -125,6 +132,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
               name,
               tiles,
               authorizationHeader: authorizationHeader || undefined,
+              serverId: serverId || undefined,
             }
           : overlay,
       ),

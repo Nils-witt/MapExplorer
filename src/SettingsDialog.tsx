@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent, MouseEvent } from 'react';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
@@ -32,8 +32,7 @@ import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import type { Overlay } from './types';
 import { DEFAULT_OVERLAY_OPACITY } from './overlayMap';
 import { useOverlays } from './OverlaysContext';
-import { loadServers, saveServers } from './storage';
-import type { ServerConnection } from './storage';
+import { useServers } from './ServersContext';
 import { ServerMapsSection } from './ServerMapsSection';
 
 interface SettingsDialogProps {
@@ -67,36 +66,15 @@ export function SettingsDialog({
   const [editTilesUrl, setEditTilesUrl] = useState('');
   const [editAuthHeader, setEditAuthHeader] = useState('');
 
-  // Servers live in IndexedDB, so they're loaded once here and shared with
-  // ServerMapsSection as state - that way a sign-in there is immediately
+  // Servers live in a shared context (also read by App for live tile
+  // authorization), so a sign-in in ServerMapsSection is immediately
   // reflected in signedInServers below without re-reading storage.
-  const [servers, setServers] = useState<ServerConnection[]>([]);
-  const serversLoadedRef = useRef(false);
+  const { servers } = useServers();
   const signedInServers = servers.filter((server) => server.token);
   const [tokenMenu, setTokenMenu] = useState<{
     anchorEl: HTMLElement;
     target: 'new' | 'edit';
   } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadServers().then((loaded) => {
-      if (cancelled) {
-        return;
-      }
-      serversLoadedRef.current = true;
-      setServers(loaded);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (serversLoadedRef.current) {
-      saveServers(servers);
-    }
-  }, [servers]);
 
   useEffect(() => {
     if (open) {
@@ -480,7 +458,7 @@ export function SettingsDialog({
 
           <Divider />
 
-          <ServerMapsSection servers={servers} onServersChange={setServers} />
+          <ServerMapsSection />
         </Stack>
       </DialogContent>
       <DialogActions>

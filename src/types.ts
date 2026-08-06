@@ -5,6 +5,10 @@ export interface Overlay {
   enabled: boolean;
   authorizationHeader?: string;
   opacity?: number;
+  // Id of the ServerConnection this overlay was added from, if any. When
+  // set, the authorization header is resolved live from that server's
+  // current token instead of the (possibly stale) `authorizationHeader`.
+  serverId?: string;
 }
 
 export interface MapPosition {

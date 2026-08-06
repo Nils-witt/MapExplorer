@@ -175,7 +175,16 @@ export function ServerConnectionCard({
       onRemoveOverlay(overlayId);
       return;
     }
-    onAddOverlay(map.name, tileUrlForMap(serverUrl, map), `Bearer ${token}`);
+    // Save the relation to this server instead of freezing the current
+    // token - the authorization header is resolved live from the server's
+    // token on every tile request, so it never goes stale.
+    onAddOverlay(
+      map.name,
+      tileUrlForMap(serverUrl, map),
+      undefined,
+      connection.id,
+      overlayId,
+    );
   };
 
   const handleResync = (map: ServerMap) => {
@@ -183,17 +192,22 @@ export function ServerConnectionCard({
       overlayIdForMap(map),
       map.name,
       tileUrlForMap(serverUrl, map),
-      `Bearer ${token}`,
+      undefined,
+      connection.id,
     );
   };
 
+  // Out of sync covers overlays added before server-linking existed (no
+  // `serverId` yet) and maps whose tile URL changed (e.g. a version bump) -
+  // the token itself can no longer go stale since it's resolved live.
   const outOfSyncMaps = (maps ?? []).filter((map) => {
     const existing = overlays.find(
       (overlay) => overlay.id === overlayIdForMap(map),
     );
     return (
       existing !== undefined &&
-      existing.authorizationHeader !== `Bearer ${token}`
+      (existing.serverId !== connection.id ||
+        existing.tiles[0] !== tileUrlForMap(serverUrl, map))
     );
   });
 
@@ -282,14 +296,14 @@ export function ServerConnectionCard({
         </Typography>
         <Stack direction="row" spacing={0.5}>
           {outOfSyncMaps.length > 0 ? (
-            <Tooltip title="Override authorization header on all overlays with the current token">
+            <Tooltip title="Relink these overlays to this server so their tiles and token stay in sync">
               <Button
                 size="small"
                 variant="outlined"
                 startIcon={<SyncIcon fontSize="small" />}
                 onClick={handleResyncAll}
               >
-                Update tokens ({outOfSyncMaps.length})
+                Resync ({outOfSyncMaps.length})
               </Button>
             </Tooltip>
           ) : null}
@@ -338,7 +352,8 @@ export function ServerConnectionCard({
             );
             const outOfSync =
               existing !== undefined &&
-              existing.authorizationHeader !== `Bearer ${token}`;
+              (existing.serverId !== connection.id ||
+                existing.tiles[0] !== tileUrlForMap(serverUrl, map));
             return (
               <ListItem
                 key={map.uuid}
@@ -346,7 +361,7 @@ export function ServerConnectionCard({
                 sx={{ pr: outOfSync ? 5 : 0 }}
                 secondaryAction={
                   outOfSync ? (
-                    <Tooltip title="Refresh access token for this overlay">
+                    <Tooltip title="Relink this overlay to this server">
                       <IconButton
                         edge="end"
                         aria-label={`Resync ${map.name}`}

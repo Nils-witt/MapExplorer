@@ -25,6 +25,7 @@ import {
 import { MarkersDialog } from './MarkersDialog';
 import { OverlaysProvider, useOverlays } from './OverlaysContext';
 import { MarkersProvider, useMarkers } from './MarkersContext';
+import { ServersProvider, useServers } from './ServersContext';
 import {
   DEFAULT_OVERLAY_OPACITY,
   OVERLAY_LAYER_PREFIX,
@@ -59,6 +60,7 @@ function MapView() {
   const mapRef = useRef<MapRef | null>(null);
   const { overlays, overlaysRef } = useOverlays();
   const { markers, addMarker, removeAllMarkers, moveMarker } = useMarkers();
+  const { serversRef } = useServers();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [markersDialogOpen, setMarkersDialogOpen] = useState(false);
@@ -143,6 +145,7 @@ function MapView() {
           const authorizationHeader = findAuthorizationHeader(
             url,
             overlaysRef.current,
+            serversRef.current,
           );
           if (!authorizationHeader) {
             return undefined;
@@ -223,10 +226,12 @@ function MapView() {
 
 export function App() {
   return (
-    <OverlaysProvider>
-      <MarkersProvider>
-        <MapView />
-      </MarkersProvider>
-    </OverlaysProvider>
+    <ServersProvider>
+      <OverlaysProvider>
+        <MarkersProvider>
+          <MapView />
+        </MarkersProvider>
+      </OverlaysProvider>
+    </ServersProvider>
   );
 }
