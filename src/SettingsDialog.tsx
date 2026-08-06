@@ -34,6 +34,7 @@ import { DEFAULT_OVERLAY_OPACITY } from './overlayMap';
 import { useOverlays } from './OverlaysContext';
 import { useServers } from './ServersContext';
 import { ServerMapsSection } from './ServerMapsSection';
+import { OverlayCacheButton } from './OverlayCacheButton';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -302,9 +303,13 @@ export function SettingsDialog({
                       <ListItem
                         key={overlay.id}
                         disablePadding
-                        sx={{ display: 'block', pr: 17, py: 0.5 }}
+                        sx={{ display: 'block', pr: 22, py: 0.5 }}
                         secondaryAction={
                           <Stack direction="row" spacing={0.5}>
+                            <OverlayCacheButton
+                              overlay={overlay}
+                              servers={servers}
+                            />
                             <IconButton
                               edge="end"
                               aria-label={`Move ${overlay.name} up`}

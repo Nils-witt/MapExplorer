@@ -68,7 +68,7 @@ export default defineConfig({
               (url.pathname.endsWith('.json') ||
                 url.pathname.includes('sprite') ||
                 /\/fonts\//.test(url.pathname)),
-            handler: 'StaleWhileRevalidate',
+            handler: 'CacheFirst',
             options: {
               cacheName: 'map-style-cache',
               expiration: {

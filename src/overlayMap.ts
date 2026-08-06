@@ -12,6 +12,19 @@ export function tileUrlPrefix(template: string): string {
 // Overlays added from a server carry a `serverId` relation instead of a
 // frozen header, so the token is always read live from the current server
 // connection rather than the (possibly expired) value captured at add time.
+export function resolveOverlayAuthorizationHeader(
+  overlay: Overlay,
+  servers: ServerConnection[],
+): string | undefined {
+  if (overlay.serverId) {
+    const server = servers.find(
+      (candidate) => candidate.id === overlay.serverId,
+    );
+    return server?.token ? `Bearer ${server.token}` : undefined;
+  }
+  return overlay.authorizationHeader;
+}
+
 export function findAuthorizationHeader(
   url: string,
   overlays: Overlay[],
@@ -25,11 +38,5 @@ export function findAuthorizationHeader(
   if (!overlay) {
     return undefined;
   }
-  if (overlay.serverId) {
-    const server = servers.find(
-      (candidate) => candidate.id === overlay.serverId,
-    );
-    return server?.token ? `Bearer ${server.token}` : undefined;
-  }
-  return overlay.authorizationHeader;
+  return resolveOverlayAuthorizationHeader(overlay, servers);
 }
