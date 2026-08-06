@@ -8,6 +8,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -16,6 +17,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -24,8 +26,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
 import OpacityIcon from '@mui/icons-material/Opacity';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import type { Overlay } from './types';
 import { DEFAULT_OVERLAY_OPACITY } from './overlayMap';
+import { loadServerToken } from './storage';
 import { ServerMapsSection } from './ServerMapsSection';
 
 interface SettingsDialogProps {
@@ -72,6 +76,10 @@ export function SettingsDialog({
   const [editName, setEditName] = useState('');
   const [editTilesUrl, setEditTilesUrl] = useState('');
   const [editAuthHeader, setEditAuthHeader] = useState('');
+
+  // Read fresh on every render (not cached in state) so it reflects a
+  // sign-in that just happened in the Server maps section below.
+  const serverToken = loadServerToken();
 
   useEffect(() => {
     if (open) {
@@ -122,6 +130,14 @@ export function SettingsDialog({
       onEditOverlay(id, name, tilesUrl, authorizationHeader || undefined);
       setEditingOverlayId(null);
     }
+  };
+
+  const useServerTokenForNewOverlay = () => {
+    setNewOverlayAuthHeader(`Bearer ${serverToken}`);
+  };
+
+  const useServerTokenForEditOverlay = () => {
+    setEditAuthHeader(`Bearer ${serverToken}`);
   };
 
   return (
@@ -217,6 +233,24 @@ export function SettingsDialog({
                                 setEditAuthHeader(event.target.value)
                               }
                               placeholder="Bearer <token>"
+                              slotProps={{
+                                input: {
+                                  endAdornment: serverToken ? (
+                                    <InputAdornment position="end">
+                                      <Tooltip title="Use current server token">
+                                        <IconButton
+                                          size="small"
+                                          edge="end"
+                                          aria-label="Use current server token"
+                                          onClick={useServerTokenForEditOverlay}
+                                        >
+                                          <VpnKeyIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </InputAdornment>
+                                  ) : undefined,
+                                },
+                              }}
                             />
                             <Stack
                               direction="row"
@@ -369,6 +403,24 @@ export function SettingsDialog({
                     setNewOverlayAuthHeader(event.target.value)
                   }
                   placeholder="Bearer <token>"
+                  slotProps={{
+                    input: {
+                      endAdornment: serverToken ? (
+                        <InputAdornment position="end">
+                          <Tooltip title="Use current server token">
+                            <IconButton
+                              size="small"
+                              edge="end"
+                              aria-label="Use current server token"
+                              onClick={useServerTokenForNewOverlay}
+                            >
+                              <VpnKeyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </InputAdornment>
+                      ) : undefined,
+                    },
+                  }}
                 />
                 <Button
                   type="submit"
