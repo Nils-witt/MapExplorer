@@ -65,6 +65,17 @@ export function ServerConnectionCard({
   const tokenRef = useRef(token);
   const refreshTokenRef = useRef(refreshToken);
 
+  // The refresh token is single-use: redeeming it invalidates it, so two
+  // concurrent 401s (e.g. overlapping requests, or React re-running an
+  // effect) must not each call refreshAccessToken - the second would use
+  // the now-stale token, fail, and clear out the session the first just
+  // refreshed. This dedupes concurrent refreshes into a single in-flight
+  // call that every caller awaits.
+  const refreshInFlightRef = useRef<Promise<{
+    token: string;
+    refreshToken: string;
+  }> | null>(null);
+
   const applyTokens = (newToken: string, newRefreshToken: string) => {
     tokenRef.current = newToken;
     refreshTokenRef.current = newRefreshToken;
@@ -104,15 +115,26 @@ export function ServerConnectionCard({
       }
       let refreshed;
       try {
-        refreshed = await refreshAccessToken(
-          serverUrl,
-          refreshTokenRef.current,
-        );
+        if (!refreshInFlightRef.current) {
+          refreshInFlightRef.current = refreshAccessToken(
+            serverUrl,
+            refreshTokenRef.current,
+          )
+            .then((result) => {
+              // Applied once here, inside the shared in-flight call, so
+              // concurrent callers don't each re-apply the same tokens.
+              applyTokens(result.token, result.refreshToken);
+              return result;
+            })
+            .finally(() => {
+              refreshInFlightRef.current = null;
+            });
+        }
+        refreshed = await refreshInFlightRef.current;
       } catch {
         clearSession();
         throw err;
       }
-      applyTokens(refreshed.token, refreshed.refreshToken);
       return call(refreshed.token);
     }
   };
