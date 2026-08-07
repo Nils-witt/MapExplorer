@@ -8,7 +8,7 @@ export interface CacheOverlayResult {
   total: number;
 }
 
-interface ManifestTile {
+export interface ManifestTile {
   z: number;
   x: number;
   y: number;
@@ -62,7 +62,11 @@ function isTileManifest(value: unknown): value is TileManifest {
   );
 }
 
-async function fetchTileManifest(
+// The overlay server publishes a manifest of exactly which tiles exist for
+// a map+version. Exported so callers that need the same underlying tile
+// list for a different purpose (e.g. deriving a geographic extent) don't
+// have to re-implement fetching and validating it.
+export async function fetchTileManifest(
   template: string,
   header: string | undefined,
 ): Promise<ManifestTile[]> {

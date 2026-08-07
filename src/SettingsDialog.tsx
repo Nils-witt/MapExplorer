@@ -35,6 +35,7 @@ import { useOverlays } from './OverlaysContext';
 import { useServers } from './ServersContext';
 import { ServerMapsSection } from './ServerMapsSection';
 import { OverlayCacheButton } from './OverlayCacheButton';
+import { CacheBackgroundTilesButton } from './CacheBackgroundTilesButton';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -393,6 +394,11 @@ export function SettingsDialog({
                     ),
                   )}
                 </List>
+                <CacheBackgroundTilesButton
+                  overlays={overlays}
+                  servers={servers}
+                  styleUrl={styleUrl}
+                />
               </>
             )}
 
