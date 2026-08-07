@@ -1,35 +1,5 @@
 import type { LocalMarker } from '../types';
 
-const CSV_FIELD_NEEDS_QUOTING = /[",\n]/;
-const CSV_QUOTE = /"/g;
-
-function escapeCsvField(value: string): string {
-  return CSV_FIELD_NEEDS_QUOTING.test(value)
-    ? `"${value.replace(CSV_QUOTE, '""')}"`
-    : value;
-}
-
-export function markersToCsv(markers: LocalMarker[]): string {
-  const rows = markers.map(
-    (marker) => `${escapeCsvField(marker.name)},${marker.lat},${marker.lng}`,
-  );
-  return ['name,latitude,longitude', ...rows].join('\n');
-}
-
-export function downloadMarkersCsv(markers: LocalMarker[]): void {
-  const blob = new Blob([markersToCsv(markers)], {
-    type: 'text/csv;charset=utf-8;',
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'markers.csv';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
 export function parseCsvRows(
   text: string,
   delimiter: string = ',',

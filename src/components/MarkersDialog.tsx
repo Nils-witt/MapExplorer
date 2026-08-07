@@ -18,15 +18,16 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import EditIcon from '@mui/icons-material/Edit';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
+
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import PlaceIcon from '@mui/icons-material/Place';
 import SaveIcon from '@mui/icons-material/Save';
 import type { LocalMarker } from '../types';
-import { downloadMarkersCsv } from '../lib/markers';
+
 import type { MarkersImportResult } from '../lib/markers';
 import { CsvImportDialog } from './CsvImportDialog';
 import { useMarkers } from '../context/MarkersContext';
+import CSVExportButton from './CSVExportButton';
 
 interface MarkersDialogProps {
   open: boolean;
@@ -294,14 +295,7 @@ export function MarkersDialog({
           >
             Import CSV
           </Button>
-          <Button
-            onClick={() => downloadMarkersCsv(markers)}
-            disabled={markers.length === 0}
-            startIcon={<FileDownloadIcon fontSize="small" />}
-            sx={{ mr: 'auto' }}
-          >
-            Export CSV
-          </Button>
+          <CSVExportButton />
           <Button onClick={handleDialogClose}>Close</Button>
         </Stack>
       </Box>
