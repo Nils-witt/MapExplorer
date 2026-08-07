@@ -26,6 +26,10 @@ interface OverlaysContextValue {
   toggleOverlay: (id: string) => void;
   changeOverlayOpacity: (id: string, opacity: number) => void;
   moveOverlay: (id: string, direction: 'up' | 'down') => void;
+  // Briefly disables and re-enables the currently shown overlays linked to a
+  // server, forcing MapLibre to unmount/remount their tile sources so the
+  // next tile request re-resolves the (now updated) authorization header.
+  refreshServerOverlays: (serverId: string) => void;
 }
 
 const OverlaysContext = createContext<OverlaysContextValue | null>(null);
@@ -66,6 +70,34 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
         overlay.id === id ? { ...overlay, enabled: !overlay.enabled } : overlay,
       ),
     );
+  };
+
+  const refreshServerOverlays = (serverId: string) => {
+    setOverlays((prev) => {
+      const idsToRefresh = prev
+        .filter((overlay) => overlay.serverId === serverId && overlay.enabled)
+        .map((overlay) => overlay.id);
+      if (idsToRefresh.length === 0) {
+        return prev;
+      }
+      // Re-enable on the next tick so the disable commits (and MapLibre
+      // unmounts the source) before the source is remounted - doing both in
+      // the same tick would batch into a no-op.
+      setTimeout(() => {
+        setOverlays((current) =>
+          current.map((overlay) =>
+            idsToRefresh.includes(overlay.id)
+              ? { ...overlay, enabled: true }
+              : overlay,
+          ),
+        );
+      }, 0);
+      return prev.map((overlay) =>
+        idsToRefresh.includes(overlay.id)
+          ? { ...overlay, enabled: false }
+          : overlay,
+      );
+    });
   };
 
   const addOverlay = (
@@ -150,6 +182,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
         toggleOverlay,
         changeOverlayOpacity,
         moveOverlay,
+        refreshServerOverlays,
       }}
     >
       {children}

@@ -47,6 +47,7 @@ export function ServerConnectionCard({
     addOverlay: onAddOverlay,
     editOverlay: onEditOverlay,
     removeOverlay: onRemoveOverlay,
+    refreshServerOverlays,
   } = useOverlays();
   const [serverUrl, setServerUrl] = useState(connection.baseUrl);
   const [username, setUsername] = useState(connection.username);
@@ -70,6 +71,10 @@ export function ServerConnectionCard({
     setToken(newToken);
     setRefreshToken(newRefreshToken);
     onChange({ token: newToken, refreshToken: newRefreshToken });
+    // Shown overlays resolve their auth header live, but MapLibre won't
+    // retry tiles it already fetched with the old token - cycle the source
+    // so it re-fetches under the new one.
+    refreshServerOverlays(connection.id);
   };
 
   const clearSession = () => {
