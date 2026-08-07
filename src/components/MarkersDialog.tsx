@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import type { ChangeEvent, FormEvent } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
@@ -24,7 +24,6 @@ import PlaceIcon from '@mui/icons-material/Place';
 import SaveIcon from '@mui/icons-material/Save';
 import type { LocalMarker } from '../types';
 
-import type { MarkersImportResult } from '../lib/markers';
 import { CsvImportDialog } from './CsvImportDialog';
 import { useMarkers } from '../context/MarkersContext';
 import CSVExportButton from './CSVExportButton';
@@ -54,13 +53,11 @@ export function MarkersDialog({
     markers,
     renameMarker: onRename,
     removeMarker: onRemove,
-    importMarkers: onImport,
   } = useMarkers();
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [importCsvText, setImportCsvText] = useState<string | null>(null);
-  const [importKey, setImportKey] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [importCsvOpen, setImportCsvOpen] = useState(false);
 
   const startEditMarker = (marker: LocalMarker) => {
     setEditingMarkerId(marker.id);
@@ -85,10 +82,6 @@ export function MarkersDialog({
     onClose();
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
   const handleRemoveAll = () => {
     if (
       window.confirm(
@@ -97,38 +90,6 @@ export function MarkersDialog({
     ) {
       setEditingMarkerId(null);
       onRemoveAll();
-    }
-  };
-
-  const handleImportFileChange = async (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) {
-      return;
-    }
-    const text = await file.text();
-    setImportCsvText(text);
-    setImportKey((key) => key + 1);
-  };
-
-  const handleCsvImportDialogClose = () => {
-    setImportCsvText(null);
-  };
-
-  const handleCsvImportConfirm = ({
-    markers: imported,
-    skipped,
-  }: MarkersImportResult) => {
-    if (imported.length > 0) {
-      onImport(imported);
-    }
-    setImportCsvText(null);
-    if (skipped > 0) {
-      window.alert(
-        `Imported ${imported.length} marker${imported.length === 1 ? '' : 's'}, skipped ${skipped} invalid row${skipped === 1 ? '' : 's'}.`,
-      );
     }
   };
 
@@ -282,15 +243,8 @@ export function MarkersDialog({
         </Box>
         <Divider />
         <Stack direction="row" spacing={1} sx={{ px: 2, py: 1.5 }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            style={{ display: 'none' }}
-            onChange={handleImportFileChange}
-          />
           <Button
-            onClick={handleImportClick}
+            onClick={() => setImportCsvOpen(true)}
             startIcon={<FileUploadIcon fontSize="small" />}
           >
             Import CSV
@@ -300,11 +254,8 @@ export function MarkersDialog({
         </Stack>
       </Box>
       <CsvImportDialog
-        key={importKey}
-        open={importCsvText !== null}
-        csvText={importCsvText ?? ''}
-        onClose={handleCsvImportDialogClose}
-        onImport={handleCsvImportConfirm}
+        open={importCsvOpen}
+        onClose={() => setImportCsvOpen(false)}
       />
     </Drawer>
   );

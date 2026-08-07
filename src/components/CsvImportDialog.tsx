@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
@@ -18,105 +18,157 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { SelectChangeEvent } from '@mui/material/Select';
-import {
-  buildMarkersFromRows,
-  CSV_DELIMITERS,
-  detectDelimiter,
-  guessColumnMapping,
-  looksLikeHeaderRow,
-  parseCsvRows,
-} from '../lib/markers';
-import type { ColumnMapping, MarkersImportResult } from '../lib/markers';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
-const CUSTOM_DELIMITER = 'custom';
-const PREVIEW_ROW_COUNT = 5;
+import { parse as parsecsv } from 'csv-parse/browser/esm/sync';
+import { useMarkers } from '../context/MarkersContext';
+import type { LocalMarker } from '../types';
+import VisuallyHiddenInput from './VisuallyHiddenInput';
 
-interface CsvImportDialogProps {
-  open: boolean;
-  csvText: string;
-  onClose: () => void;
-  onImport: (result: MarkersImportResult) => void;
+export const IMPORT_COLUMNS = ['id', 'name', 'lat', 'lng'] as const;
+export interface ColumnMapping {
+  id: number | null;
+  name: number | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface MarkersImportResult {
+  markers: LocalMarker[];
+  skipped: number;
 }
 
 type MappingField = keyof ColumnMapping;
 
-interface InitialCsvState {
-  delimiterChoice: string;
-  customDelimiter: string;
-  hasHeader: boolean;
-  mapping: ColumnMapping;
+const PREVIEW_ROW_COUNT = 5;
+
+export const CSV_DELIMITERS: { value: string; label: string }[] = [
+  { value: ',', label: 'Comma (,)' },
+  { value: ';', label: 'Semicolon (;)' },
+  { value: '\t', label: 'Tab' },
+  { value: '|', label: 'Pipe (|)' },
+];
+
+const FIELD_LABELS: Record<MappingField, string> = {
+  id: 'ID column',
+  name: 'Name column',
+  lat: 'Latitude column',
+  lng: 'Longitude column',
+};
+
+interface CsvImportDialogProps {
+  open: boolean;
+  onClose: () => void;
 }
 
-function computeInitialState(csvText: string): InitialCsvState {
-  const detected = detectDelimiter(csvText);
-  const isKnownDelimiter = CSV_DELIMITERS.some(
-    (option) => option.value === detected,
-  );
-  const rows = parseCsvRows(csvText, detected);
-  const headerDetected = looksLikeHeaderRow(rows[0]);
-  const mapping = headerDetected
-    ? guessColumnMapping(rows[0])
-    : {
-        name: rows[0]?.[0] !== undefined ? 0 : null,
-        lat: rows[0]?.[1] !== undefined ? 1 : null,
-        lng: rows[0]?.[2] !== undefined ? 2 : null,
+export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
+  const { importMarkers } = useMarkers();
+
+  const [csvText, setCsvText] = useState('');
+
+  const [delimiterChoice, setDelimiterChoice] = useState<string>(';');
+  const [hasHeader, setHasHeader] = useState(true);
+  const [mapping, setMapping] = useState<ColumnMapping>({
+    id: null,
+    name: null,
+    lat: null,
+    lng: null,
+  });
+
+  const { rows: allRows, error: parseError } = useMemo(():
+    { rows: string[][]; error: null } | { rows: []; error: string } => {
+    if (!csvText) {
+      return { rows: [], error: null };
+    }
+    try {
+      return {
+        rows: parsecsv(csvText, {
+          columns: false,
+          delimiter: delimiterChoice,
+          skip_empty_lines: true,
+        }) as string[][],
+        error: null,
       };
-  return {
-    delimiterChoice: isKnownDelimiter ? detected : CUSTOM_DELIMITER,
-    customDelimiter: isKnownDelimiter ? '' : detected,
-    hasHeader: headerDetected,
-    mapping,
-  };
-}
-
-export function CsvImportDialog({
-  open,
-  csvText,
-  onClose,
-  onImport,
-}: CsvImportDialogProps) {
-  // Computed once on mount; the parent remounts this component (via `key`)
-  // whenever a new file is selected, so re-deriving these from csvText in
-  // an effect isn't necessary.
-  const [initialState] = useState(() => computeInitialState(csvText));
-  const [delimiterChoice, setDelimiterChoice] = useState(
-    initialState.delimiterChoice,
-  );
-  const [customDelimiter, setCustomDelimiter] = useState(
-    initialState.customDelimiter,
-  );
-  const [hasHeader, setHasHeader] = useState(initialState.hasHeader);
-  const [mapping, setMapping] = useState<ColumnMapping>(initialState.mapping);
-
-  const activeDelimiter =
-    delimiterChoice === CUSTOM_DELIMITER ? customDelimiter : delimiterChoice;
-
-  const allRows = useMemo(
-    () => parseCsvRows(csvText, activeDelimiter || ','),
-    [csvText, activeDelimiter],
-  );
+    } catch (error) {
+      return {
+        rows: [],
+        error: error instanceof Error ? error.message : 'Failed to parse CSV.',
+      };
+    }
+  }, [csvText, delimiterChoice]);
 
   const headerRow = hasHeader ? allRows[0] : undefined;
   const dataRows = hasHeader ? allRows.slice(1) : allRows;
+
+  const handleImportFileChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    const text = await file.text();
+    setCsvText(text);
+    // Column indices from a previously loaded file don't apply to this one.
+    setMapping({ id: null, name: null, lat: null, lng: null });
+  };
 
   const columnCount = allRows.reduce(
     (max, row) => Math.max(max, row.length),
     0,
   );
-  const columnLabels = Array.from({ length: columnCount }, (_, index) =>
-    headerRow?.[index]?.trim() ? headerRow[index] : `Column ${index + 1}`,
-  );
+  const columnLabels = useMemo(() => {
+    if (hasHeader && headerRow) {
+      return headerRow.map((field, index) => field || `Column ${index + 1}`);
+    } else {
+      return Array.from({ length: columnCount }, (_, i) => `Column ${i + 1}`);
+    }
+  }, [hasHeader, headerRow, columnCount]);
 
-  const result = useMemo(
-    () => buildMarkersFromRows(dataRows, mapping),
-    [dataRows, mapping],
-  );
+  const result = useMemo((): MarkersImportResult => {
+    if (mapping.name === null || mapping.lat === null || mapping.lng === null) {
+      return { markers: [], skipped: dataRows.length };
+    }
+    const nameIndex = mapping.name;
+    const latIndex = mapping.lat;
+    const lngIndex = mapping.lng;
+    const idIndex = mapping.id;
+
+    const markers: LocalMarker[] = [];
+    let skipped = 0;
+    dataRows.forEach((row, index) => {
+      const name = (row[nameIndex] ?? '').trim();
+      const lat = Number.parseFloat(row[latIndex] ?? '');
+      const lng = Number.parseFloat(row[lngIndex] ?? '');
+      if (
+        !name ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        Math.abs(lat) > 90 ||
+        Math.abs(lng) > 180
+      ) {
+        skipped += 1;
+        return;
+      }
+      const rawId = idIndex !== null ? (row[idIndex] ?? '').trim() : '';
+      markers.push({
+        id: rawId || `marker-${Date.now()}-${index}`,
+        name,
+        lat,
+        lng,
+      });
+    });
+    return { markers, skipped };
+  }, [dataRows, mapping]);
 
   const mappingComplete =
-    mapping.name !== null && mapping.lat !== null && mapping.lng !== null;
+    mapping.id !== null &&
+    mapping.name !== null &&
+    mapping.lat !== null &&
+    mapping.lng !== null;
 
   const handleDelimiterChange = (event: SelectChangeEvent) => {
     setDelimiterChoice(event.target.value);
@@ -132,7 +184,8 @@ export function CsvImportDialog({
     };
 
   const handleImport = () => {
-    onImport(result);
+    importMarkers(result.markers);
+    onClose();
   };
 
   return (
@@ -141,6 +194,20 @@ export function CsvImportDialog({
       <DialogContent>
         <Stack spacing={2.5} sx={{ pt: 1 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <Button
+              component="label"
+              role={undefined}
+              variant="contained"
+              tabIndex={-1}
+              startIcon={<CloudUploadIcon />}
+            >
+              Upload file
+              <VisuallyHiddenInput
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleImportFileChange}
+              />
+            </Button>
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel id="csv-delimiter-label">Delimiter</InputLabel>
               <Select
@@ -154,19 +221,8 @@ export function CsvImportDialog({
                     {option.label}
                   </MenuItem>
                 ))}
-                <MenuItem value={CUSTOM_DELIMITER}>Custom</MenuItem>
               </Select>
             </FormControl>
-            {delimiterChoice === CUSTOM_DELIMITER ? (
-              <TextField
-                label="Custom delimiter"
-                size="small"
-                value={customDelimiter}
-                onChange={(event) => setCustomDelimiter(event.target.value)}
-                sx={{ width: 160 }}
-                slotProps={{ htmlInput: { maxLength: 1 } }}
-              />
-            ) : null}
             <FormControlLabel
               control={
                 <Checkbox
@@ -179,24 +235,14 @@ export function CsvImportDialog({
           </Stack>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            {(['name', 'lat', 'lng'] as MappingField[]).map((field) => (
+            {IMPORT_COLUMNS.map((field) => (
               <FormControl key={field} size="small" fullWidth>
                 <InputLabel id={`csv-map-${field}-label`}>
-                  {field === 'name'
-                    ? 'Name column'
-                    : field === 'lat'
-                      ? 'Latitude column'
-                      : 'Longitude column'}
+                  {FIELD_LABELS[field]}
                 </InputLabel>
                 <Select
                   labelId={`csv-map-${field}-label`}
-                  label={
-                    field === 'name'
-                      ? 'Name column'
-                      : field === 'lat'
-                        ? 'Latitude column'
-                        : 'Longitude column'
-                  }
+                  label={FIELD_LABELS[field]}
                   value={mapping[field] === null ? '' : String(mapping[field])}
                   onChange={handleMappingChange(field)}
                 >
@@ -204,7 +250,7 @@ export function CsvImportDialog({
                     <em>Not mapped</em>
                   </MenuItem>
                   {columnLabels.map((label, index) => (
-                    <MenuItem key={index} value={index}>
+                    <MenuItem key={index} value={String(index)}>
                       {label}
                     </MenuItem>
                   ))}
@@ -213,7 +259,11 @@ export function CsvImportDialog({
             ))}
           </Stack>
 
-          {columnCount === 0 ? (
+          {parseError ? (
+            <Alert severity="error">
+              Could not parse this file as CSV: {parseError}
+            </Alert>
+          ) : columnCount === 0 ? (
             <Alert severity="warning">No data found in this file.</Alert>
           ) : (
             <>
@@ -221,20 +271,8 @@ export function CsvImportDialog({
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      {columnLabels.map((label, index) => (
-                        <TableCell
-                          key={index}
-                          sx={{
-                            fontWeight:
-                              index === mapping.name ||
-                              index === mapping.lat ||
-                              index === mapping.lng
-                                ? 700
-                                : 400,
-                          }}
-                        >
-                          {label}
-                        </TableCell>
+                      {IMPORT_COLUMNS.map((label, index) => (
+                        <TableCell key={index}>{label}</TableCell>
                       ))}
                     </TableRow>
                   </TableHead>
@@ -243,9 +281,11 @@ export function CsvImportDialog({
                       .slice(0, PREVIEW_ROW_COUNT)
                       .map((row, rowIndex) => (
                         <TableRow key={rowIndex}>
-                          {columnLabels.map((_, colIndex) => (
+                          {IMPORT_COLUMNS.map((value, colIndex) => (
                             <TableCell key={colIndex}>
-                              {row[colIndex] ?? ''}
+                              {mapping[value] !== null
+                                ? row[mapping[value]!]
+                                : ''}
                             </TableCell>
                           ))}
                         </TableRow>
@@ -263,7 +303,7 @@ export function CsvImportDialog({
 
           {!mappingComplete && columnCount > 0 ? (
             <Alert severity="info">
-              Select a column for name, latitude, and longitude to continue.
+              Select a column for id, name, latitude, and longitude to continue.
             </Alert>
           ) : null}
           {mappingComplete ? (
