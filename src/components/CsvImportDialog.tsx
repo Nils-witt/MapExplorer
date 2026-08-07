@@ -28,8 +28,8 @@ import {
   guessColumnMapping,
   looksLikeHeaderRow,
   parseCsvRows,
-} from './markers';
-import type { ColumnMapping, MarkersImportResult } from './markers';
+} from '../lib/markers';
+import type { ColumnMapping, MarkersImportResult } from '../lib/markers';
 
 const CUSTOM_DELIMITER = 'custom';
 const PREVIEW_ROW_COUNT = 5;

@@ -18,9 +18,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LogoutIcon from '@mui/icons-material/Logout';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SyncIcon from '@mui/icons-material/Sync';
-import type { ServerConnection } from './storage';
-import type { ServerMap } from './serverApi';
-import { useOverlays } from './OverlaysContext';
+import type { ServerConnection } from '../lib/storage';
+import type { ServerMap } from '../api/serverApi';
+import { useOverlays } from '../context/OverlaysContext';
 import {
   DEFAULT_SERVER_BASE_URL,
   login,
@@ -29,7 +29,7 @@ import {
   refreshAccessToken,
   tileUrlForMap,
   ServerApiError,
-} from './serverApi';
+} from '../api/serverApi';
 
 interface ServerConnectionCardProps {
   connection: ServerConnection;

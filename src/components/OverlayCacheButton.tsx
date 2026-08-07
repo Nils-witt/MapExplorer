@@ -4,9 +4,9 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
 import DownloadForOfflineIcon from '@mui/icons-material/DownloadForOffline';
-import type { Overlay } from './types';
-import type { ServerConnection } from './storage';
-import { cacheOverlayTiles, isTileCacheSupported } from './tileCache';
+import type { Overlay } from '../types';
+import type { ServerConnection } from '../lib/storage';
+import { cacheOverlayTiles, isTileCacheSupported } from '../lib/tileCache';
 
 type CacheState =
   | { status: 'caching'; done: number; total: number }

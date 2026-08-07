@@ -1,4 +1,4 @@
-import type { Overlay } from './types';
+import type { Overlay } from '../types';
 import type { ServerConnection } from './storage';
 import { resolveOverlayAuthorizationHeader } from './overlayMap';
 import { fetchTileManifest, type CacheOverlayResult } from './tileCache';

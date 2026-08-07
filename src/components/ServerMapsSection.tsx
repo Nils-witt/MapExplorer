@@ -2,8 +2,8 @@ import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
-import { loadDefaultServerUrl } from './storage';
-import { useServers } from './ServersContext';
+import { loadDefaultServerUrl } from '../lib/storage';
+import { useServers } from '../context/ServersContext';
 import { ServerConnectionCard } from './ServerConnectionCard';
 
 export function ServerMapsSection() {

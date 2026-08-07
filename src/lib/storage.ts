@@ -1,4 +1,4 @@
-import type { LocalMarker, MapPosition, Overlay } from './types';
+import type { LocalMarker, MapPosition, Overlay } from '../types';
 
 const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
 const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';

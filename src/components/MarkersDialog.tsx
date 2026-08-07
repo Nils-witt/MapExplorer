@@ -22,11 +22,11 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import PlaceIcon from '@mui/icons-material/Place';
 import SaveIcon from '@mui/icons-material/Save';
-import type { LocalMarker } from './types';
-import { downloadMarkersCsv } from './markers';
-import type { MarkersImportResult } from './markers';
+import type { LocalMarker } from '../types';
+import { downloadMarkersCsv } from '../lib/markers';
+import type { MarkersImportResult } from '../lib/markers';
 import { CsvImportDialog } from './CsvImportDialog';
-import { useMarkers } from './MarkersContext';
+import { useMarkers } from '../context/MarkersContext';
 
 interface MarkersDialogProps {
   open: boolean;

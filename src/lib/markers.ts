@@ -1,4 +1,4 @@
-import type { LocalMarker } from './types';
+import type { LocalMarker } from '../types';
 
 const CSV_FIELD_NEEDS_QUOTING = /[",\n]/;
 const CSV_QUOTE = /"/g;

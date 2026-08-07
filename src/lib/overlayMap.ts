@@ -1,4 +1,4 @@
-import type { Overlay } from './types';
+import type { Overlay } from '../types';
 import type { ServerConnection } from './storage';
 
 export const OVERLAY_SOURCE_PREFIX = 'overlay-source-';

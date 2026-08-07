@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import type { ServerConnection } from './storage';
-import { loadServers, saveServers } from './storage';
+import type { ServerConnection } from '../lib/storage';
+import { loadServers, saveServers } from '../lib/storage';
 
 interface ServersContextValue {
   servers: ServerConnection[];

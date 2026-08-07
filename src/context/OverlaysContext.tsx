@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import type { Overlay } from './types';
-import { loadOverlays, saveOverlays } from './storage';
+import type { Overlay } from '../types';
+import { loadOverlays, saveOverlays } from '../lib/storage';
 
 interface OverlaysContextValue {
   overlays: Overlay[];

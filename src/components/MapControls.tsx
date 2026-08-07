@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useControl } from '@vis.gl/react-maplibre';
-import { SettingsControl } from './SettingsControl';
-import { MarkerControl } from './MarkerControl';
-import { MarkersListControl } from './MarkersListControl';
+import { SettingsControl } from '../controls/SettingsControl';
+import { MarkerControl } from '../controls/MarkerControl';
+import { MarkersListControl } from '../controls/MarkersListControl';
 
 export function SettingsButtonControl({ onOpen }: { onOpen: () => void }) {
   useControl(() => new SettingsControl(onOpen), { position: 'top-right' });

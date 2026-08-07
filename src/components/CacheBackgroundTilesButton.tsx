@@ -4,14 +4,14 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import DownloadForOfflineIcon from '@mui/icons-material/DownloadForOffline';
-import type { Overlay } from './types';
-import type { ServerConnection } from './storage';
-import { isTileCacheSupported } from './tileCache';
+import type { Overlay } from '../types';
+import type { ServerConnection } from '../lib/storage';
+import { isTileCacheSupported } from '../lib/tileCache';
 import {
   cacheStyleTiles,
   DEFAULT_CACHE_ZOOM_RANGE,
   overlaysBoundingBox,
-} from './styleTileCache';
+} from '../lib/styleTileCache';
 
 type CacheState =
   | { status: 'caching'; done: number; total: number }

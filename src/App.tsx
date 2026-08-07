@@ -17,22 +17,22 @@ import {
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { SettingsDialog } from './SettingsDialog';
+import { SettingsDialog } from './components/SettingsDialog';
 import {
   AddMarkerButtonControl,
   MarkersListButtonControl,
   SettingsButtonControl,
-} from './MapControls';
-import { MarkersDialog } from './MarkersDialog';
-import { OverlaysProvider, useOverlays } from './OverlaysContext';
-import { MarkersProvider, useMarkers } from './MarkersContext';
-import { ServersProvider, useServers } from './ServersContext';
+} from './components/MapControls';
+import { MarkersDialog } from './components/MarkersDialog';
+import { OverlaysProvider, useOverlays } from './context/OverlaysContext';
+import { MarkersProvider, useMarkers } from './context/MarkersContext';
+import { ServersProvider, useServers } from './context/ServersContext';
 import {
   DEFAULT_OVERLAY_OPACITY,
   OVERLAY_LAYER_PREFIX,
   OVERLAY_SOURCE_PREFIX,
   findAuthorizationHeader,
-} from './overlayMap';
+} from './lib/overlayMap';
 import {
   applyConfig,
   loadMapPosition,
@@ -41,7 +41,7 @@ import {
   saveMapPosition,
   saveShowMarkerLabels,
   saveStyleUrl,
-} from './storage';
+} from './lib/storage';
 import PlaceIcon from '@mui/icons-material/Place';
 
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
