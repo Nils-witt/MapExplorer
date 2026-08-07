@@ -11,6 +11,7 @@ import {
   Map,
   Marker,
   NavigationControl,
+  Popup,
   Source,
 } from '@vis.gl/react-maplibre';
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
@@ -35,8 +36,10 @@ import {
 import {
   applyConfig,
   loadMapPosition,
+  loadShowMarkerLabels,
   loadStyleUrl,
   saveMapPosition,
+  saveShowMarkerLabels,
   saveStyleUrl,
 } from './storage';
 import PlaceIcon from '@mui/icons-material/Place';
@@ -72,6 +75,9 @@ function MapView() {
     () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
   );
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [showMarkerLabels, setShowMarkerLabels] = useState(() =>
+    loadShowMarkerLabels(),
+  );
 
   useEffect(() => {
     try {
@@ -91,6 +97,10 @@ function MapView() {
   useEffect(() => {
     saveStyleUrl(styleUrl);
   }, [styleUrl]);
+
+  useEffect(() => {
+    saveShowMarkerLabels(showMarkerLabels);
+  }, [showMarkerLabels]);
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
     if (!addingMarker) {
@@ -203,6 +213,22 @@ function MapView() {
             />
           </Marker>
         ))}
+        {showMarkerLabels
+          ? markers.map((marker) => (
+              <Popup
+                key={marker.id}
+                longitude={marker.lng}
+                latitude={marker.lat}
+                closeButton={false}
+                closeOnClick={false}
+                anchor="top"
+                offset={16}
+                className="marker-label-popup"
+              >
+                {marker.name}
+              </Popup>
+            ))
+          : null}
       </Map>
       {addingMarker ? (
         <div className="marker-hint">Click the map to place a marker</div>
@@ -219,6 +245,8 @@ function MapView() {
         onClose={() => setMarkersDialogOpen(false)}
         onRemoveAll={handleRemoveAllMarkers}
         onLocate={handleLocateMarker}
+        showMarkerLabels={showMarkerLabels}
+        onShowMarkerLabelsChange={setShowMarkerLabels}
       />
     </>
   );

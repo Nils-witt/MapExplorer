@@ -63,6 +63,21 @@ body,
   pointer-events: none;
 }
 
+.marker-label-popup {
+  .maplibregl-popup-content {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .maplibregl-popup-tip {
+    display: none;
+  }
+}
+
 .local-marker-popup {
   display: flex;
   flex-direction: column;

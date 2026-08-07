@@ -10,6 +10,7 @@ const LEGACY_SERVER_REFRESH_TOKEN_STORAGE_KEY =
   'mapexplorer.serverRefreshToken';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const MARKERS_STORAGE_KEY = 'mapexplorer.markers';
+const SHOW_MARKER_LABELS_STORAGE_KEY = 'mapexplorer.showMarkerLabels';
 
 function readValue(key: string, fallback = ''): string {
   try {
@@ -416,4 +417,12 @@ export async function loadMarkers(): Promise<LocalMarker[]> {
 
 export async function saveMarkers(markers: LocalMarker[]): Promise<void> {
   await tableReplaceAllOrdered(MARKERS_TABLE_NAME, markers);
+}
+
+export function loadShowMarkerLabels(): boolean {
+  return readValue(SHOW_MARKER_LABELS_STORAGE_KEY) === 'true';
+}
+
+export function saveShowMarkerLabels(show: boolean): void {
+  writeValue(SHOW_MARKER_LABELS_STORAGE_KEY, show ? 'true' : '');
 }

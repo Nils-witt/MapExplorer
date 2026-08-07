@@ -53,7 +53,11 @@ export default defineConfig({
             options: {
               cacheName: 'map-tiles-cache',
               expiration: {
-                maxEntries: 4000,
+                // Sized to comfortably hold a background-tile pre-cache
+                // (zoom 8-14 over an overlay's area) alongside ordinary
+                // browsing, so precached tiles aren't evicted by casual
+                // panning elsewhere on the map.
+                maxEntries: 20000,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
               cacheableResponse: {

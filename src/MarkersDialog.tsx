@@ -4,12 +4,14 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
@@ -31,6 +33,8 @@ interface MarkersDialogProps {
   onClose: () => void;
   onRemoveAll: () => void;
   onLocate: (id: string) => void;
+  showMarkerLabels: boolean;
+  onShowMarkerLabelsChange: (show: boolean) => void;
 }
 
 function formatCoordinate(marker: LocalMarker): string {
@@ -42,6 +46,8 @@ export function MarkersDialog({
   onClose,
   onRemoveAll,
   onLocate,
+  showMarkerLabels,
+  onShowMarkerLabelsChange,
 }: MarkersDialogProps) {
   const {
     markers,
@@ -163,6 +169,23 @@ export function MarkersDialog({
             </IconButton>
           </Stack>
         </Stack>
+        <Divider />
+        <Box sx={{ px: 2, py: 0.5 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showMarkerLabels}
+                onChange={(event) =>
+                  onShowMarkerLabelsChange(event.target.checked)
+                }
+              />
+            }
+            label={
+              <Typography variant="body2">Show marker names on map</Typography>
+            }
+          />
+        </Box>
         <Divider />
         <Box sx={{ px: 2, py: 1.5, overflowY: 'auto', flex: 1 }}>
           {markers.length === 0 ? (
