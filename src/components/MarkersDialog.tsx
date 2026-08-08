@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { FormEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -31,7 +31,6 @@ import PlaceIcon from '@mui/icons-material/Place';
 import SaveIcon from '@mui/icons-material/Save';
 import type { GeoObjectEntry } from '../types';
 
-import { CsvImportDialog } from './CsvImportDialog';
 import { MigrateMarkersBanner } from './MigrateMarkersBanner';
 import {
   describeGeoObjectError,
@@ -40,6 +39,12 @@ import {
 } from '../context/GeoObjectsContext';
 import CSVExportButton from './CSVExportButton';
 import EditLocationAltIcon from '@mui/icons-material/EditLocationAlt';
+
+// CSV import pulls in a parser library and a table UI that most sessions
+// never use, so it's kept out of this dialog's own chunk until opened.
+const CsvImportDialog = lazy(() =>
+  import('./CsvImportDialog').then((m) => ({ default: m.CsvImportDialog })),
+);
 
 interface MarkersDialogProps {
   open: boolean;
@@ -83,6 +88,7 @@ export function MarkersDialog({
   const [deletingAll, setDeletingAll] = useState(false);
 
   const [importCsvOpen, setImportCsvOpen] = useState(false);
+  const [importCsvLoaded, setImportCsvLoaded] = useState(false);
 
   const startEdit = (entry: GeoObjectEntry) => {
     setEditingUuid(entry.geoObject.uuid);
@@ -320,6 +326,7 @@ export function MarkersDialog({
                 ) : (
                   <ListItem
                     key={entry.geoObject.uuid}
+                    className="markers-list-row"
                     disablePadding
                     sx={{ pr: 10 }}
                     secondaryAction={
@@ -378,7 +385,10 @@ export function MarkersDialog({
         <Divider />
         <Stack direction="row" spacing={1} sx={{ px: 2, py: 1.5 }}>
           <Button
-            onClick={() => setImportCsvOpen(true)}
+            onClick={() => {
+              setImportCsvLoaded(true);
+              setImportCsvOpen(true);
+            }}
             startIcon={<FileUploadIcon fontSize="small" />}
           >
             Import CSV
@@ -387,10 +397,14 @@ export function MarkersDialog({
           <Button onClick={handleDialogClose}>Close</Button>
         </Stack>
       </Box>
-      <CsvImportDialog
-        open={importCsvOpen}
-        onClose={() => setImportCsvOpen(false)}
-      />
+      {importCsvLoaded ? (
+        <Suspense fallback={null}>
+          <CsvImportDialog
+            open={importCsvOpen}
+            onClose={() => setImportCsvOpen(false)}
+          />
+        </Suspense>
+      ) : null}
     </Drawer>
   );
 }

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { Overlay } from '../types';
 import { loadOverlays, saveOverlays } from '../lib/storage';
@@ -68,15 +76,15 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     }
   }, [overlays]);
 
-  const toggleOverlay = (id: string) => {
+  const toggleOverlay = useCallback((id: string) => {
     setOverlays((prev) =>
       prev.map((overlay) =>
         overlay.id === id ? { ...overlay, enabled: !overlay.enabled } : overlay,
       ),
     );
-  };
+  }, []);
 
-  const refreshServerOverlays = (serverId: string) => {
+  const refreshServerOverlays = useCallback((serverId: string) => {
     setOverlays((prev) => {
       const idsToRefresh = prev
         .filter((overlay) => overlay.serverId === serverId && overlay.enabled)
@@ -102,45 +110,48 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
           : overlay,
       );
     });
-  };
+  }, []);
 
-  const addOverlay = (
-    name: string,
-    tilesUrl: string,
-    authorizationHeader?: string,
-    serverId?: string,
-    id?: string,
-    mapId?: string,
-    mapVersion?: string,
-  ) => {
-    setOverlays((prev) => [
-      ...prev,
-      {
-        id: id ?? `custom-${Date.now()}`,
-        name,
-        tiles: [tilesUrl],
-        enabled: true,
-        authorizationHeader: authorizationHeader || undefined,
-        serverId: serverId || undefined,
-        mapId: mapId || undefined,
-        mapVersion: mapVersion || undefined,
-      },
-    ]);
-  };
+  const addOverlay = useCallback(
+    (
+      name: string,
+      tilesUrl: string,
+      authorizationHeader?: string,
+      serverId?: string,
+      id?: string,
+      mapId?: string,
+      mapVersion?: string,
+    ) => {
+      setOverlays((prev) => [
+        ...prev,
+        {
+          id: id ?? `custom-${Date.now()}`,
+          name,
+          tiles: [tilesUrl],
+          enabled: true,
+          authorizationHeader: authorizationHeader || undefined,
+          serverId: serverId || undefined,
+          mapId: mapId || undefined,
+          mapVersion: mapVersion || undefined,
+        },
+      ]);
+    },
+    [],
+  );
 
-  const changeOverlayOpacity = (id: string, opacity: number) => {
+  const changeOverlayOpacity = useCallback((id: string, opacity: number) => {
     setOverlays((prev) =>
       prev.map((overlay) =>
         overlay.id === id ? { ...overlay, opacity } : overlay,
       ),
     );
-  };
+  }, []);
 
-  const removeOverlay = (id: string) => {
+  const removeOverlay = useCallback((id: string) => {
     setOverlays((prev) => prev.filter((overlay) => overlay.id !== id));
-  };
+  }, []);
 
-  const moveOverlay = (id: string, direction: 'up' | 'down') => {
+  const moveOverlay = useCallback((id: string, direction: 'up' | 'down') => {
     setOverlays((prev) => {
       const index = prev.findIndex((overlay) => overlay.id === id);
       const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -151,55 +162,70 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
       return next;
     });
-  };
+  }, []);
 
-  const editOverlay = (
-    id: string,
-    name: string,
-    tilesUrl: string,
-    authorizationHeader?: string,
-    serverId?: string,
-    mapId?: string,
-    mapVersion?: string,
-  ) => {
-    const tiles = tilesUrl
-      .split(',')
-      .map((tile) => tile.trim())
-      .filter(Boolean);
-    setOverlays((prev) =>
-      prev.map((overlay) =>
-        overlay.id === id
-          ? {
-              ...overlay,
-              name,
-              tiles,
-              authorizationHeader: authorizationHeader || undefined,
-              // Preserve the existing server link when the caller doesn't
-              // pass one (e.g. the generic Settings edit form only touches
-              // name/tiles/auth) - only an explicit value should change it.
-              serverId: serverId || overlay.serverId,
-              mapId: mapId || overlay.mapId,
-              mapVersion: mapVersion || overlay.mapVersion,
-            }
-          : overlay,
-      ),
-    );
-  };
+  const editOverlay = useCallback(
+    (
+      id: string,
+      name: string,
+      tilesUrl: string,
+      authorizationHeader?: string,
+      serverId?: string,
+      mapId?: string,
+      mapVersion?: string,
+    ) => {
+      const tiles = tilesUrl
+        .split(',')
+        .map((tile) => tile.trim())
+        .filter(Boolean);
+      setOverlays((prev) =>
+        prev.map((overlay) =>
+          overlay.id === id
+            ? {
+                ...overlay,
+                name,
+                tiles,
+                authorizationHeader: authorizationHeader || undefined,
+                // Preserve the existing server link when the caller doesn't
+                // pass one (e.g. the generic Settings edit form only touches
+                // name/tiles/auth) - only an explicit value should change it.
+                serverId: serverId || overlay.serverId,
+                mapId: mapId || overlay.mapId,
+                mapVersion: mapVersion || overlay.mapVersion,
+              }
+            : overlay,
+        ),
+      );
+    },
+    [],
+  );
+
+  const value = useMemo(
+    () => ({
+      overlays,
+      overlaysRef,
+      addOverlay,
+      editOverlay,
+      removeOverlay,
+      toggleOverlay,
+      changeOverlayOpacity,
+      moveOverlay,
+      refreshServerOverlays,
+    }),
+    [
+      overlays,
+      addOverlay,
+      editOverlay,
+      removeOverlay,
+      toggleOverlay,
+      changeOverlayOpacity,
+      moveOverlay,
+      refreshServerOverlays,
+    ],
+  );
 
   return (
-    <OverlaysContext.Provider
-      value={{
-        overlays,
-        overlaysRef,
-        addOverlay,
-        editOverlay,
-        removeOverlay,
-        toggleOverlay,
-        changeOverlayOpacity,
-        moveOverlay,
-        refreshServerOverlays,
-      }}
-    >
+    <OverlaysContext.Provider value={value}>
       {children}
     </OverlaysContext.Provider>
   );

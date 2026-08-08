@@ -448,22 +448,37 @@ export function GeoObjectsProvider({ children }: { children: ReactNode }) {
     [resolveOverlay, callWithAuth, applyGeoObjectsByOverlay],
   );
 
+  const value = useMemo(
+    () => ({
+      geoObjectsByOverlay,
+      allGeoObjects,
+      loadingOverlayIds,
+      errorsByOverlay,
+      eligibleOverlays,
+      activeOverlayId,
+      setActiveOverlayId,
+      isOnline,
+      createGeoObject,
+      updateGeoObject,
+      deleteGeoObject,
+    }),
+    [
+      geoObjectsByOverlay,
+      allGeoObjects,
+      loadingOverlayIds,
+      errorsByOverlay,
+      eligibleOverlays,
+      activeOverlayId,
+      setActiveOverlayId,
+      isOnline,
+      createGeoObject,
+      updateGeoObject,
+      deleteGeoObject,
+    ],
+  );
+
   return (
-    <GeoObjectsContext.Provider
-      value={{
-        geoObjectsByOverlay,
-        allGeoObjects,
-        loadingOverlayIds,
-        errorsByOverlay,
-        eligibleOverlays,
-        activeOverlayId,
-        setActiveOverlayId,
-        isOnline,
-        createGeoObject,
-        updateGeoObject,
-        deleteGeoObject,
-      }}
-    >
+    <GeoObjectsContext.Provider value={value}>
       {children}
     </GeoObjectsContext.Provider>
   );
