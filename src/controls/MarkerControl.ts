@@ -9,6 +9,7 @@ export class MarkerControl implements IControl {
   private container: HTMLDivElement | undefined;
   private button: HTMLButtonElement | undefined;
   private readonly onToggle: () => void;
+  private disabled = false;
 
   constructor(onToggle: () => void) {
     this.onToggle = onToggle;
@@ -24,7 +25,11 @@ export class MarkerControl implements IControl {
     this.button.setAttribute('aria-label', 'Add marker');
     this.button.title = 'Add marker';
     this.button.innerHTML = MARKER_ICON_SVG;
-    this.button.addEventListener('click', () => this.onToggle());
+    this.button.addEventListener('click', () => {
+      if (!this.disabled) {
+        this.onToggle();
+      }
+    });
 
     this.container.appendChild(this.button);
     return this.container;
@@ -38,5 +43,15 @@ export class MarkerControl implements IControl {
 
   setActive(active: boolean): void {
     this.button?.classList.toggle('active', active);
+  }
+
+  setDisabled(disabled: boolean, reason?: string): void {
+    this.disabled = disabled;
+    if (!this.button) {
+      return;
+    }
+    this.button.disabled = disabled;
+    this.button.classList.toggle('disabled', disabled);
+    this.button.title = disabled && reason ? reason : 'Add marker';
   }
 }

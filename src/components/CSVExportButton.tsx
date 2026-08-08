@@ -1,20 +1,21 @@
 import Button from '@mui/material/Button';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import { useMarkers } from '../context/MarkersContext';
-import type { LocalMarker } from '../types';
+import { useGeoObjects } from '../context/GeoObjectsContext';
+import type { GeoObjectEntry } from '../types';
 import { stringify } from 'csv-stringify/browser/esm/sync';
 
-export function downloadMarkersCsv(markers: LocalMarker[]): void {
+export function downloadMarkersCsv(entries: GeoObjectEntry[]): void {
   const csv = stringify(
-    markers.map((marker) => ({
-      id: marker.id,
-      name: marker.name,
-      lat: marker.lat,
-      lng: marker.lng,
+    entries.map((entry) => ({
+      uuid: entry.geoObject.uuid,
+      name: entry.geoObject.name,
+      lat: entry.geoObject.latitude,
+      lng: entry.geoObject.longitude,
+      externalId: entry.geoObject.externalId ?? '',
     })),
     {
       header: true,
-      columns: ['id', 'name', 'lat', 'lng'],
+      columns: ['uuid', 'name', 'lat', 'lng', 'externalId'],
     },
   );
 
@@ -32,12 +33,12 @@ export function downloadMarkersCsv(markers: LocalMarker[]): void {
 }
 
 export default function CSVExportButton() {
-  const { markers } = useMarkers();
+  const { allGeoObjects } = useGeoObjects();
 
   return (
     <Button
-      onClick={() => downloadMarkersCsv(markers)}
-      disabled={markers.length === 0}
+      onClick={() => downloadMarkersCsv(allGeoObjects)}
+      disabled={allGeoObjects.length === 0}
       startIcon={<FileDownloadIcon fontSize="small" />}
       sx={{ mr: 'auto' }}
     >

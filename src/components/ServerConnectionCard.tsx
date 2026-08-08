@@ -21,12 +21,12 @@ import SyncIcon from '@mui/icons-material/Sync';
 import type { ServerConnection } from '../lib/storage';
 import type { ServerMap } from '../api/serverApi';
 import { useOverlays } from '../context/OverlaysContext';
+import { useServers } from '../context/ServersContext';
 import {
   DEFAULT_SERVER_BASE_URL,
   login,
   listMaps,
   overlayIdForMap,
-  refreshAccessToken,
   tileUrlForMap,
   ServerApiError,
 } from '../api/serverApi';
@@ -49,101 +49,39 @@ export function ServerConnectionCard({
     removeOverlay: onRemoveOverlay,
     refreshServerOverlays,
   } = useOverlays();
+  const { callWithAuth } = useServers();
   const [serverUrl, setServerUrl] = useState(connection.baseUrl);
   const [username, setUsername] = useState(connection.username);
   const [password, setPassword] = useState('');
-  const [token, setToken] = useState(connection.token);
-  const [refreshToken, setRefreshToken] = useState(connection.refreshToken);
   const [maps, setMaps] = useState<ServerMap[] | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [loadingMaps, setLoadingMaps] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mirrors of the token state, readable synchronously right after a write.
-  // State setters don't apply until the next render, but callWithAuth needs
-  // the value it just refreshed within the same call.
-  const tokenRef = useRef(token);
-  const refreshTokenRef = useRef(refreshToken);
-
-  // The refresh token is single-use: redeeming it invalidates it, so two
-  // concurrent 401s (e.g. overlapping requests, or React re-running an
-  // effect) must not each call refreshAccessToken - the second would use
-  // the now-stale token, fail, and clear out the session the first just
-  // refreshed. This dedupes concurrent refreshes into a single in-flight
-  // call that every caller awaits.
-  const refreshInFlightRef = useRef<Promise<{
-    token: string;
-    refreshToken: string;
-  }> | null>(null);
-
-  const applyTokens = (newToken: string, newRefreshToken: string) => {
-    tokenRef.current = newToken;
-    refreshTokenRef.current = newRefreshToken;
-    setToken(newToken);
-    setRefreshToken(newRefreshToken);
-    onChange({ token: newToken, refreshToken: newRefreshToken });
-    // Shown overlays resolve their auth header live, but MapLibre won't
-    // retry tiles it already fetched with the old token - cycle the source
-    // so it re-fetches under the new one.
-    refreshServerOverlays(connection.id);
-  };
+  // A refreshed token doesn't retroactively update tiles MapLibre already
+  // fetched under the old one - cycle the source so it re-fetches under the
+  // new token whenever this connection's token changes underneath us.
+  const prevTokenRef = useRef(connection.token);
+  useEffect(() => {
+    if (prevTokenRef.current !== connection.token) {
+      prevTokenRef.current = connection.token;
+      if (connection.token) {
+        refreshServerOverlays(connection.id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection.token]);
 
   const clearSession = () => {
-    tokenRef.current = '';
-    refreshTokenRef.current = '';
-    setToken('');
-    setRefreshToken('');
     setMaps(null);
     onChange({ token: '', refreshToken: '' });
-  };
-
-  // Runs `call` with the current token; if the token turned out to be
-  // expired, redeems the (single-use) refresh token for a new pair and
-  // retries once before giving up and forcing a full re-login.
-  const callWithAuth = async <T,>(
-    call: (activeToken: string) => Promise<T>,
-  ): Promise<T> => {
-    try {
-      return await call(tokenRef.current);
-    } catch (err) {
-      if (!(err instanceof ServerApiError) || err.status !== 401) {
-        throw err;
-      }
-      if (!refreshTokenRef.current) {
-        clearSession();
-        throw err;
-      }
-      let refreshed;
-      try {
-        if (!refreshInFlightRef.current) {
-          refreshInFlightRef.current = refreshAccessToken(
-            serverUrl,
-            refreshTokenRef.current,
-          )
-            .then((result) => {
-              // Applied once here, inside the shared in-flight call, so
-              // concurrent callers don't each re-apply the same tokens.
-              applyTokens(result.token, result.refreshToken);
-              return result;
-            })
-            .finally(() => {
-              refreshInFlightRef.current = null;
-            });
-        }
-        refreshed = await refreshInFlightRef.current;
-      } catch {
-        clearSession();
-        throw err;
-      }
-      return call(refreshed.token);
-    }
   };
 
   const fetchMaps = async () => {
     setLoadingMaps(true);
     setError(null);
     try {
-      setMaps(await callWithAuth((t) => listMaps(serverUrl, t)));
+      setMaps(await callWithAuth(connection.id, (t) => listMaps(serverUrl, t)));
     } catch (err) {
       if (err instanceof ServerApiError) {
         setError(
@@ -161,7 +99,7 @@ export function ServerConnectionCard({
   };
 
   useEffect(() => {
-    if (token) {
+    if (connection.token) {
       fetchMaps();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,8 +114,12 @@ export function ServerConnectionCard({
       const tokens = await login(trimmedUrl, username.trim(), password);
       setServerUrl(trimmedUrl);
       setPassword('');
-      onChange({ baseUrl: trimmedUrl, username: username.trim() });
-      applyTokens(tokens.token, tokens.refreshToken);
+      onChange({
+        baseUrl: trimmedUrl,
+        username: username.trim(),
+        token: tokens.token,
+        refreshToken: tokens.refreshToken,
+      });
       await fetchMaps();
     } catch (err) {
       if (err instanceof ServerApiError) {
@@ -211,6 +153,8 @@ export function ServerConnectionCard({
       undefined,
       connection.id,
       overlayId,
+      map.uuid,
+      map.currentVersion,
     );
   };
 
@@ -221,12 +165,15 @@ export function ServerConnectionCard({
       tileUrlForMap(serverUrl, map),
       undefined,
       connection.id,
+      map.uuid,
+      map.currentVersion,
     );
   };
 
   // Out of sync covers overlays added before server-linking existed (no
-  // `serverId` yet) and maps whose tile URL changed (e.g. a version bump) -
-  // the token itself can no longer go stale since it's resolved live.
+  // `serverId` yet), maps whose tile URL changed (e.g. a version bump), and
+  // maps whose tracked version no longer matches the server's current one
+  // (the signal GeoObjects fetching uses to know it needs to refetch).
   const outOfSyncMaps = (maps ?? []).filter((map) => {
     const existing = overlays.find(
       (overlay) => overlay.id === overlayIdForMap(map),
@@ -234,7 +181,8 @@ export function ServerConnectionCard({
     return (
       existing !== undefined &&
       (existing.serverId !== connection.id ||
-        existing.tiles[0] !== tileUrlForMap(serverUrl, map))
+        existing.tiles[0] !== tileUrlForMap(serverUrl, map) ||
+        existing.mapVersion !== map.currentVersion)
     );
   });
 
@@ -242,7 +190,7 @@ export function ServerConnectionCard({
     outOfSyncMaps.forEach(handleResync);
   };
 
-  if (!token) {
+  if (!connection.token) {
     return (
       <Stack
         component="form"
@@ -319,7 +267,7 @@ export function ServerConnectionCard({
         sx={{ alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Typography variant="body2" color="text.secondary">
-          Signed in as {username} on {serverUrl}
+          Signed in as {connection.username} on {serverUrl}
         </Typography>
         <Stack direction="row" spacing={0.5}>
           {outOfSyncMaps.length > 0 ? (
@@ -380,7 +328,8 @@ export function ServerConnectionCard({
             const outOfSync =
               existing !== undefined &&
               (existing.serverId !== connection.id ||
-                existing.tiles[0] !== tileUrlForMap(serverUrl, map));
+                existing.tiles[0] !== tileUrlForMap(serverUrl, map) ||
+                existing.mapVersion !== map.currentVersion);
             return (
               <ListItem
                 key={map.uuid}

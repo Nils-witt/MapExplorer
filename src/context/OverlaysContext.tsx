@@ -14,6 +14,8 @@ interface OverlaysContextValue {
     authorizationHeader?: string,
     serverId?: string,
     id?: string,
+    mapId?: string,
+    mapVersion?: string,
   ) => void;
   editOverlay: (
     id: string,
@@ -21,6 +23,8 @@ interface OverlaysContextValue {
     tilesUrl: string,
     authorizationHeader?: string,
     serverId?: string,
+    mapId?: string,
+    mapVersion?: string,
   ) => void;
   removeOverlay: (id: string) => void;
   toggleOverlay: (id: string) => void;
@@ -106,6 +110,8 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     authorizationHeader?: string,
     serverId?: string,
     id?: string,
+    mapId?: string,
+    mapVersion?: string,
   ) => {
     setOverlays((prev) => [
       ...prev,
@@ -116,6 +122,8 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
         enabled: true,
         authorizationHeader: authorizationHeader || undefined,
         serverId: serverId || undefined,
+        mapId: mapId || undefined,
+        mapVersion: mapVersion || undefined,
       },
     ]);
   };
@@ -151,6 +159,8 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     tilesUrl: string,
     authorizationHeader?: string,
     serverId?: string,
+    mapId?: string,
+    mapVersion?: string,
   ) => {
     const tiles = tilesUrl
       .split(',')
@@ -164,7 +174,12 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
               name,
               tiles,
               authorizationHeader: authorizationHeader || undefined,
-              serverId: serverId || undefined,
+              // Preserve the existing server link when the caller doesn't
+              // pass one (e.g. the generic Settings edit form only touches
+              // name/tiles/auth) - only an explicit value should change it.
+              serverId: serverId || overlay.serverId,
+              mapId: mapId || overlay.mapId,
+              mapVersion: mapVersion || overlay.mapVersion,
             }
           : overlay,
       ),
