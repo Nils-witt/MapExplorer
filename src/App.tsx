@@ -42,9 +42,11 @@ import {
 import {
   applyConfig,
   loadMapPosition,
+  loadShowAllMarkers,
   loadShowMarkerLabels,
   loadStyleUrl,
   saveMapPosition,
+  saveShowAllMarkers,
   saveShowMarkerLabels,
   saveStyleUrl,
 } from './lib/storage';
@@ -83,12 +85,16 @@ function MapView() {
     loadStyleUrl(DEFAULT_STYLE_URL),
   );
   const [addingMarker, setAddingMarker] = useState(false);
+  const [relocatingUuid, setRelocatingUuid] = useState<string | null>(null);
   const [initialPosition] = useState(
     () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
   );
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [showMarkerLabels, setShowMarkerLabels] = useState(() =>
     loadShowMarkerLabels(),
+  );
+  const [showAllMarkers, setShowAllMarkers] = useState(() =>
+    loadShowAllMarkers(),
   );
   const [mapActionError, setMapActionError] = useState<string | null>(null);
 
@@ -115,6 +121,10 @@ function MapView() {
     saveShowMarkerLabels(showMarkerLabels);
   }, [showMarkerLabels]);
 
+  useEffect(() => {
+    saveShowAllMarkers(showAllMarkers);
+  }, [showAllMarkers]);
+
   const addMarkerDisabled = !activeOverlayId || !isOnline;
   const addMarkerDisabledReason = !isOnline
     ? "You're offline"
@@ -123,6 +133,25 @@ function MapView() {
       : undefined;
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
+    if (relocatingUuid) {
+      const uuid = relocatingUuid;
+      setRelocatingUuid(null);
+      const entry = allGeoObjects.find(
+        (candidate) => candidate.geoObject.uuid === uuid,
+      );
+      if (!entry) {
+        return;
+      }
+      const { lng, lat } = event.lngLat;
+      updateGeoObject(
+        entry.overlayId,
+        entry.geoObject.uuid,
+        toGeoObjectRequest(entry, { latitude: lat, longitude: lng }),
+      ).catch((err) => {
+        setMapActionError(describeGeoObjectError(err));
+      });
+      return;
+    }
     if (!addingMarker) {
       return;
     }
@@ -140,10 +169,22 @@ function MapView() {
     });
   };
 
+  const handleRelocateMarker = (uuid: string) => {
+    setAddingMarker(false);
+    setSelectedMarkerId(uuid);
+    setRelocatingUuid(uuid);
+  };
+
   const handleMoveEnd = (event: ViewStateChangeEvent) => {
     const { longitude, latitude, zoom, bearing, pitch } = event.viewState;
     saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });
   };
+
+  const visibleGeoObjects = showAllMarkers
+    ? allGeoObjects
+    : allGeoObjects.filter(
+        (entry) => entry.geoObject.uuid === selectedMarkerId,
+      );
 
   const handleLocateMarker = (uuid: string) => {
     const entry = allGeoObjects.find(
@@ -172,7 +213,7 @@ function MapView() {
           pitch: initialPosition.pitch,
         }}
         mapStyle={styleUrl}
-        cursor={addingMarker ? 'crosshair' : undefined}
+        cursor={addingMarker || relocatingUuid ? 'crosshair' : undefined}
         style={{ position: 'absolute', inset: 0 }}
         transformRequest={(
           url: string,
@@ -225,7 +266,7 @@ function MapView() {
               />
             </Source>
           ))}
-        {allGeoObjects.map((entry) => (
+        {visibleGeoObjects.map((entry) => (
           <Marker
             key={entry.geoObject.uuid}
             longitude={entry.geoObject.longitude}
@@ -253,7 +294,7 @@ function MapView() {
           </Marker>
         ))}
         {showMarkerLabels
-          ? allGeoObjects.map((entry) => (
+          ? visibleGeoObjects.map((entry) => (
               <Popup
                 key={entry.geoObject.uuid}
                 longitude={entry.geoObject.longitude}
@@ -271,6 +312,9 @@ function MapView() {
       </Map>
       {addingMarker ? (
         <div className="marker-hint">Click the map to place a marker</div>
+      ) : null}
+      {relocatingUuid ? (
+        <div className="marker-hint">Click the map to move the marker</div>
       ) : null}
       {mapActionError ? (
         <Alert
@@ -298,8 +342,11 @@ function MapView() {
         open={markersDialogOpen}
         onClose={() => setMarkersDialogOpen(false)}
         onLocate={handleLocateMarker}
+        onRelocate={handleRelocateMarker}
         showMarkerLabels={showMarkerLabels}
         onShowMarkerLabelsChange={setShowMarkerLabels}
+        showAllMarkers={showAllMarkers}
+        onShowAllMarkersChange={setShowAllMarkers}
       />
     </>
   );

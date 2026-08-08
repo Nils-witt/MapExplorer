@@ -39,13 +39,17 @@ import {
   useGeoObjects,
 } from '../context/GeoObjectsContext';
 import CSVExportButton from './CSVExportButton';
+import EditLocationAltIcon from '@mui/icons-material/EditLocationAlt';
 
 interface MarkersDialogProps {
   open: boolean;
   onClose: () => void;
   onLocate: (uuid: string) => void;
+  onRelocate: (uuid: string) => void;
   showMarkerLabels: boolean;
   onShowMarkerLabelsChange: (show: boolean) => void;
+  showAllMarkers: boolean;
+  onShowAllMarkersChange: (show: boolean) => void;
 }
 
 function formatCoordinate(entry: GeoObjectEntry): string {
@@ -56,8 +60,11 @@ export function MarkersDialog({
   open,
   onClose,
   onLocate,
+  onRelocate,
   showMarkerLabels,
   onShowMarkerLabelsChange,
+  showAllMarkers,
+  onShowAllMarkersChange,
 }: MarkersDialogProps) {
   const {
     allGeoObjects,
@@ -211,6 +218,22 @@ export function MarkersDialog({
             control={
               <Switch
                 size="small"
+                checked={showAllMarkers}
+                onChange={(event) =>
+                  onShowAllMarkersChange(event.target.checked)
+                }
+              />
+            }
+            label={
+              <Typography variant="body2">Show all markers on map</Typography>
+            }
+          />
+        </Box>
+        <Box sx={{ px: 2, py: 0.5 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
                 checked={showMarkerLabels}
                 onChange={(event) =>
                   onShowMarkerLabelsChange(event.target.checked)
@@ -301,6 +324,13 @@ export function MarkersDialog({
                     sx={{ pr: 10 }}
                     secondaryAction={
                       <Stack direction="row" spacing={0.5}>
+                        <IconButton
+                          edge="end"
+                          aria-label={`Move ${entry.geoObject.name}`}
+                          onClick={() => onRelocate(entry.geoObject.uuid)}
+                        >
+                          <EditLocationAltIcon fontSize="small" />
+                        </IconButton>
                         <IconButton
                           edge="end"
                           aria-label={`Rename ${entry.geoObject.name}`}
