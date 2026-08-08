@@ -472,7 +472,15 @@ export function SettingsDialog({
           <ServerMapsSection />
         </Stack>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ justifyContent: 'space-between' }}>
+        <Typography variant="caption" color="text.secondary">
+          {[
+            __APP_VERSION__ !== 'unknown' ? `v${__APP_VERSION__}` : null,
+            __GIT_COMMIT__ !== 'unknown' ? `(${__GIT_COMMIT__})` : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        </Typography>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
       <Menu
