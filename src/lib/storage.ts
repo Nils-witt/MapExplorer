@@ -359,7 +359,8 @@ export function loadMapPosition(): MapPosition | null {
 }
 
 export function saveMapPosition(position: MapPosition): void {
-  writeValue(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
+  void position;
+  writeValue(MAP_POSITION_STORAGE_KEY, '');
 }
 
 function isLocalMarker(value: unknown): value is LocalMarker {
