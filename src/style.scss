@@ -78,6 +78,14 @@ body,
   }
 }
 
+// Skips layout/paint for off-screen rows so a marker list with hundreds of
+// entries (e.g. after a large CSV import) doesn't pay full rendering cost
+// for rows the user can't currently see.
+.markers-list-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+
 .local-marker-popup {
   display: flex;
   flex-direction: column;

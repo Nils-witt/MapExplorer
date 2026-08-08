@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   MapLayerMouseEvent,
   MapRef,
@@ -18,13 +18,11 @@ import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import Alert from '@mui/material/Alert';
-import { SettingsDialog } from './components/SettingsDialog';
 import {
   AddMarkerButtonControl,
   MarkersListButtonControl,
   SettingsButtonControl,
 } from './components/MapControls';
-import { MarkersDialog } from './components/MarkersDialog';
 import { OverlaysProvider, useOverlays } from './context/OverlaysContext';
 import {
   GeoObjectsProvider,
@@ -56,6 +54,21 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
 setWorkerUrl(workerUrl);
 
+// Both dialogs are hidden behind an `open` flag until the user opens the
+// settings menu or the markers list - loading their code (and, for
+// MarkersDialog, the CSV import machinery it pulls in) eagerly would bloat
+// the initial bundle for something most sessions never touch.
+const SettingsDialog = lazy(() =>
+  import('./components/SettingsDialog').then((m) => ({
+    default: m.SettingsDialog,
+  })),
+);
+const MarkersDialog = lazy(() =>
+  import('./components/MarkersDialog').then((m) => ({
+    default: m.MarkersDialog,
+  })),
+);
+
 const DEFAULT_STYLE_URL =
   import.meta.env.VITE_DEFAULT_STYLE_URL ??
   'https://demotiles.maplibre.org/style.json';
@@ -80,7 +93,12 @@ function MapView() {
   const { serversRef } = useServers();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Once true, stays true - lets the (lazy-loaded) dialog stay mounted
+  // across close/reopen so its close transition still animates, while still
+  // deferring the initial chunk load until first opened.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [markersDialogOpen, setMarkersDialogOpen] = useState(false);
+  const [markersDialogLoaded, setMarkersDialogLoaded] = useState(false);
   const [styleUrl, setStyleUrl] = useState(() =>
     loadStyleUrl(DEFAULT_STYLE_URL),
   );
@@ -180,11 +198,20 @@ function MapView() {
     saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });
   };
 
-  const visibleGeoObjects = showAllMarkers
-    ? allGeoObjects
-    : allGeoObjects.filter(
-        (entry) => entry.geoObject.uuid === selectedMarkerId,
-      );
+  const visibleGeoObjects = useMemo(
+    () =>
+      showAllMarkers
+        ? allGeoObjects
+        : allGeoObjects.filter(
+            (entry) => entry.geoObject.uuid === selectedMarkerId,
+          ),
+    [allGeoObjects, showAllMarkers, selectedMarkerId],
+  );
+
+  const enabledOverlaysTopFirst = useMemo(
+    () => [...overlays].reverse().filter((overlay) => overlay.enabled),
+    [overlays],
+  );
 
   const handleLocateMarker = (uuid: string) => {
     const entry = allGeoObjects.find(
@@ -239,33 +266,40 @@ function MapView() {
           disabled={addMarkerDisabled}
           disabledReason={addMarkerDisabledReason}
         />
-        <MarkersListButtonControl onOpen={() => setMarkersDialogOpen(true)} />
+        <MarkersListButtonControl
+          onOpen={() => {
+            setMarkersDialogLoaded(true);
+            setMarkersDialogOpen(true);
+          }}
+        />
         <GeolocateControl
           position="top-left"
           positionOptions={{ enableHighAccuracy: true }}
           trackUserLocation
         />
-        <SettingsButtonControl onOpen={() => setSettingsOpen(true)} />
-        {[...overlays]
-          .reverse()
-          .filter((overlay) => overlay.enabled)
-          .map((overlay) => (
-            <Source
-              key={overlay.id}
-              id={`${OVERLAY_SOURCE_PREFIX}${overlay.id}`}
+        <SettingsButtonControl
+          onOpen={() => {
+            setSettingsLoaded(true);
+            setSettingsOpen(true);
+          }}
+        />
+        {enabledOverlaysTopFirst.map((overlay) => (
+          <Source
+            key={overlay.id}
+            id={`${OVERLAY_SOURCE_PREFIX}${overlay.id}`}
+            type="raster"
+            tiles={overlay.tiles}
+            tileSize={256}
+          >
+            <Layer
+              id={`${OVERLAY_LAYER_PREFIX}${overlay.id}`}
               type="raster"
-              tiles={overlay.tiles}
-              tileSize={256}
-            >
-              <Layer
-                id={`${OVERLAY_LAYER_PREFIX}${overlay.id}`}
-                type="raster"
-                paint={{
-                  'raster-opacity': overlay.opacity ?? DEFAULT_OVERLAY_OPACITY,
-                }}
-              />
-            </Source>
-          ))}
+              paint={{
+                'raster-opacity': overlay.opacity ?? DEFAULT_OVERLAY_OPACITY,
+              }}
+            />
+          </Source>
+        ))}
         {visibleGeoObjects.map((entry) => (
           <Marker
             key={entry.geoObject.uuid}
@@ -332,22 +366,30 @@ function MapView() {
         </Alert>
       ) : null}
       <div className="copyright">© 2026 Nils Witt</div>
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        styleUrl={styleUrl}
-        onApplyStyle={setStyleUrl}
-      />
-      <MarkersDialog
-        open={markersDialogOpen}
-        onClose={() => setMarkersDialogOpen(false)}
-        onLocate={handleLocateMarker}
-        onRelocate={handleRelocateMarker}
-        showMarkerLabels={showMarkerLabels}
-        onShowMarkerLabelsChange={setShowMarkerLabels}
-        showAllMarkers={showAllMarkers}
-        onShowAllMarkersChange={setShowAllMarkers}
-      />
+      {settingsLoaded ? (
+        <Suspense fallback={null}>
+          <SettingsDialog
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            styleUrl={styleUrl}
+            onApplyStyle={setStyleUrl}
+          />
+        </Suspense>
+      ) : null}
+      {markersDialogLoaded ? (
+        <Suspense fallback={null}>
+          <MarkersDialog
+            open={markersDialogOpen}
+            onClose={() => setMarkersDialogOpen(false)}
+            onLocate={handleLocateMarker}
+            onRelocate={handleRelocateMarker}
+            showMarkerLabels={showMarkerLabels}
+            onShowMarkerLabelsChange={setShowMarkerLabels}
+            showAllMarkers={showAllMarkers}
+            onShowAllMarkersChange={setShowAllMarkers}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

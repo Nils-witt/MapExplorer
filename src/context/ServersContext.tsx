@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { ServerConnection } from '../lib/storage';
 import { loadServers, saveServers } from '../lib/storage';
@@ -41,15 +49,16 @@ export function ServersProvider({ children }: { children: ReactNode }) {
   // after the render commits, not synchronously after `setServers`). So
   // every mutation updates `serversRef.current` directly, in lockstep with
   // the state update, instead of relying on an effect to mirror it.
-  const applyServers = (
-    updater: (prev: ServerConnection[]) => ServerConnection[],
-  ) => {
-    setServers((prev) => {
-      const next = updater(prev);
-      serversRef.current = next;
-      return next;
-    });
-  };
+  const applyServers = useCallback(
+    (updater: (prev: ServerConnection[]) => ServerConnection[]) => {
+      setServers((prev) => {
+        const next = updater(prev);
+        serversRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -72,29 +81,38 @@ export function ServersProvider({ children }: { children: ReactNode }) {
     }
   }, [servers]);
 
-  const addServer = (baseUrl: string): ServerConnection => {
-    const server: ServerConnection = {
-      id: crypto.randomUUID(),
-      baseUrl,
-      username: '',
-      token: '',
-      refreshToken: '',
-    };
-    applyServers((prev) => [...prev, server]);
-    return server;
-  };
+  const addServer = useCallback(
+    (baseUrl: string): ServerConnection => {
+      const server: ServerConnection = {
+        id: crypto.randomUUID(),
+        baseUrl,
+        username: '',
+        token: '',
+        refreshToken: '',
+      };
+      applyServers((prev) => [...prev, server]);
+      return server;
+    },
+    [applyServers],
+  );
 
-  const updateServer = (id: string, patch: Partial<ServerConnection>) => {
-    applyServers((prev) =>
-      prev.map((server) =>
-        server.id === id ? { ...server, ...patch } : server,
-      ),
-    );
-  };
+  const updateServer = useCallback(
+    (id: string, patch: Partial<ServerConnection>) => {
+      applyServers((prev) =>
+        prev.map((server) =>
+          server.id === id ? { ...server, ...patch } : server,
+        ),
+      );
+    },
+    [applyServers],
+  );
 
-  const removeServer = (id: string) => {
-    applyServers((prev) => prev.filter((server) => server.id !== id));
-  };
+  const removeServer = useCallback(
+    (id: string) => {
+      applyServers((prev) => prev.filter((server) => server.id !== id));
+    },
+    [applyServers],
+  );
 
   // One in-flight refresh promise per server, so concurrent 401s for the
   // same server share a single refresh instead of each redeeming the
@@ -103,63 +121,67 @@ export function ServersProvider({ children }: { children: ReactNode }) {
     new Map(),
   );
 
-  const callWithAuth = async <T,>(
-    serverId: string,
-    call: (token: string) => Promise<T>,
-  ): Promise<T> => {
-    const server = serversRef.current.find((s) => s.id === serverId);
-    if (!server) {
-      throw new Error(`Unknown server: ${serverId}`);
-    }
-    try {
-      return await call(server.token);
-    } catch (err) {
-      if (!(err instanceof ServerApiError) || err.status !== 401) {
-        throw err;
+  const callWithAuth = useCallback(
+    async <T,>(
+      serverId: string,
+      call: (token: string) => Promise<T>,
+    ): Promise<T> => {
+      const server = serversRef.current.find((s) => s.id === serverId);
+      if (!server) {
+        throw new Error(`Unknown server: ${serverId}`);
       }
-      if (!server.refreshToken) {
-        updateServer(serverId, { token: '', refreshToken: '' });
-        throw err;
-      }
-      let refreshed: AuthTokens;
       try {
-        let inFlight = refreshInFlightRefs.current.get(serverId);
-        if (!inFlight) {
-          inFlight = refreshAccessToken(server.baseUrl, server.refreshToken)
-            .then((result) => {
-              updateServer(serverId, {
-                token: result.token,
-                refreshToken: result.refreshToken,
-              });
-              return result;
-            })
-            .finally(() => {
-              refreshInFlightRefs.current.delete(serverId);
-            });
-          refreshInFlightRefs.current.set(serverId, inFlight);
+        return await call(server.token);
+      } catch (err) {
+        if (!(err instanceof ServerApiError) || err.status !== 401) {
+          throw err;
         }
-        refreshed = await inFlight;
-      } catch {
-        updateServer(serverId, { token: '', refreshToken: '' });
-        throw err;
+        if (!server.refreshToken) {
+          updateServer(serverId, { token: '', refreshToken: '' });
+          throw err;
+        }
+        let refreshed: AuthTokens;
+        try {
+          let inFlight = refreshInFlightRefs.current.get(serverId);
+          if (!inFlight) {
+            inFlight = refreshAccessToken(server.baseUrl, server.refreshToken)
+              .then((result) => {
+                updateServer(serverId, {
+                  token: result.token,
+                  refreshToken: result.refreshToken,
+                });
+                return result;
+              })
+              .finally(() => {
+                refreshInFlightRefs.current.delete(serverId);
+              });
+            refreshInFlightRefs.current.set(serverId, inFlight);
+          }
+          refreshed = await inFlight;
+        } catch {
+          updateServer(serverId, { token: '', refreshToken: '' });
+          throw err;
+        }
+        return call(refreshed.token);
       }
-      return call(refreshed.token);
-    }
-  };
+    },
+    [updateServer],
+  );
+
+  const value = useMemo(
+    () => ({
+      servers,
+      serversRef,
+      addServer,
+      updateServer,
+      removeServer,
+      callWithAuth,
+    }),
+    [servers, addServer, updateServer, removeServer, callWithAuth],
+  );
 
   return (
-    <ServersContext.Provider
-      value={{
-        servers,
-        serversRef,
-        addServer,
-        updateServer,
-        removeServer,
-        callWithAuth,
-      }}
-    >
-      {children}
-    </ServersContext.Provider>
+    <ServersContext.Provider value={value}>{children}</ServersContext.Provider>
   );
 }
 
