@@ -4,6 +4,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+ARG GIT_COMMIT=unknown
+ARG APP_VERSION=unknown
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV APP_VERSION=$APP_VERSION
+
 COPY . .
 RUN npm run build
 
