@@ -1,4 +1,9 @@
-import type { LocalMarker, MapPosition, Overlay } from '../types';
+import type {
+  GeoObjectEntry,
+  LegacyLocalMarker,
+  MapPosition,
+  Overlay,
+} from '../types';
 
 const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
 const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';
@@ -11,6 +16,7 @@ const LEGACY_SERVER_REFRESH_TOKEN_STORAGE_KEY =
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const MARKERS_STORAGE_KEY = 'mapexplorer.markers';
 const SHOW_MARKER_LABELS_STORAGE_KEY = 'mapexplorer.showMarkerLabels';
+const ACTIVE_OVERLAY_ID_STORAGE_KEY = 'mapexplorer.activeOverlayId';
 
 function readValue(key: string, fallback = ''): string {
   try {
@@ -36,16 +42,21 @@ function writeValue(key: string, value: string): void {
 // layers) so they live in IndexedDB rather than localStorage. Everything
 // else here is small config and stays in localStorage for simplicity.
 const IDB_DATABASE_NAME = 'mapexplorer';
-const IDB_DATABASE_VERSION = 2;
+const IDB_DATABASE_VERSION = 3;
 
 // Legacy object store from schema v1: each of markers/overlays/servers was
 // kept as a single serialized array under one key. Still opened (read-only,
 // for one-time migration) so upgrades from v1 don't lose data.
 const IDB_KV_STORE_NAME = 'kv';
 
+// Legacy table from before local markers were replaced by server-backed
+// GeoObjects. Kept read-only, purely so any markers a user placed before the
+// upgrade can be offered for one-time migration onto a server map.
 const MARKERS_TABLE_NAME = 'markers';
 const OVERLAYS_TABLE_NAME = 'overlays';
 const SERVERS_TABLE_NAME = 'servers';
+const GEO_OBJECTS_TABLE_NAME = 'geoObjects';
+const GEO_OBJECTS_OVERLAY_INDEX_NAME = 'overlayId';
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -67,6 +78,15 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(SERVERS_TABLE_NAME)) {
         db.createObjectStore(SERVERS_TABLE_NAME, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(GEO_OBJECTS_TABLE_NAME)) {
+        const geoObjectsStore = db.createObjectStore(GEO_OBJECTS_TABLE_NAME, {
+          keyPath: 'geoObject.uuid',
+        });
+        geoObjectsStore.createIndex(
+          GEO_OBJECTS_OVERLAY_INDEX_NAME,
+          'overlayId',
+        );
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -362,7 +382,7 @@ export function saveMapPosition(position: MapPosition): void {
   writeValue(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
 }
 
-function isLocalMarker(value: unknown): value is LocalMarker {
+function isLegacyLocalMarker(value: unknown): value is LegacyLocalMarker {
   if (!value || typeof value !== 'object') {
     return false;
   }
@@ -377,7 +397,7 @@ function isLocalMarker(value: unknown): value is LocalMarker {
 
 // Installs from before markers moved to IndexedDB kept them as a JSON blob
 // in localStorage under the same key. Fold that in once, then drop it.
-function migrateLegacyMarkers(): LocalMarker[] {
+function migrateLegacyMarkersFromLocalStorage(): LegacyLocalMarker[] {
   const stored = readValue(MARKERS_STORAGE_KEY);
   writeValue(MARKERS_STORAGE_KEY, '');
   if (!stored) {
@@ -385,7 +405,7 @@ function migrateLegacyMarkers(): LocalMarker[] {
   }
   try {
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.filter(isLocalMarker) : [];
+    return Array.isArray(parsed) ? parsed.filter(isLegacyLocalMarker) : [];
   } catch {
     return [];
   }
@@ -394,29 +414,87 @@ function migrateLegacyMarkers(): LocalMarker[] {
 // Installs from before markers moved to the `markers` table kept them as a
 // single JSON blob under one key in the old `kv` store. Fold that in once
 // (falling back to the even older localStorage blob), then drop it.
-async function migrateMarkersToTable(): Promise<LocalMarker[]> {
-  const stored = await kvGet<LocalMarker[]>(MARKERS_STORAGE_KEY);
+async function migrateLegacyMarkersToTable(): Promise<LegacyLocalMarker[]> {
+  const stored = await kvGet<LegacyLocalMarker[]>(MARKERS_STORAGE_KEY);
   if (stored !== undefined) {
     await kvDelete(MARKERS_STORAGE_KEY);
-    return Array.isArray(stored) ? stored.filter(isLocalMarker) : [];
+    return Array.isArray(stored) ? stored.filter(isLegacyLocalMarker) : [];
   }
-  return migrateLegacyMarkers();
+  return migrateLegacyMarkersFromLocalStorage();
 }
 
-export async function loadMarkers(): Promise<LocalMarker[]> {
-  const stored = await tableGetAllOrdered<LocalMarker>(MARKERS_TABLE_NAME);
+// Local markers were retired in favor of server-backed GeoObjects. This only
+// reads whatever's left in the old `markers` table (folding in any
+// even-older storage formats first) so the app can offer a one-time
+// migration onto a chosen server map; nothing writes to this table anymore
+// outside of that fold-in.
+export async function loadLegacyMarkers(): Promise<LegacyLocalMarker[]> {
+  const stored =
+    await tableGetAllOrdered<LegacyLocalMarker>(MARKERS_TABLE_NAME);
   if (stored.length > 0) {
-    return stored.filter(isLocalMarker);
+    return stored.filter(isLegacyLocalMarker);
   }
-  const migrated = await migrateMarkersToTable();
+  const migrated = await migrateLegacyMarkersToTable();
   if (migrated.length > 0) {
-    await saveMarkers(migrated);
+    await tableReplaceAllOrdered(MARKERS_TABLE_NAME, migrated);
   }
   return migrated;
 }
 
-export async function saveMarkers(markers: LocalMarker[]): Promise<void> {
+export async function clearLegacyMarkers(): Promise<void> {
+  await tableReplaceAllOrdered(MARKERS_TABLE_NAME, []);
+}
+
+// Rewrites the legacy table to hold exactly these markers - used after a
+// partial migration so already-succeeded markers aren't left behind to be
+// re-migrated (and duplicated) on the next attempt.
+export async function saveLegacyMarkers(
+  markers: LegacyLocalMarker[],
+): Promise<void> {
   await tableReplaceAllOrdered(MARKERS_TABLE_NAME, markers);
+}
+
+export async function loadCachedGeoObjects(): Promise<GeoObjectEntry[]> {
+  return tableGetAll<GeoObjectEntry>(GEO_OBJECTS_TABLE_NAME);
+}
+
+// Replaces every cached GeoObject row for a single overlay, leaving other
+// overlays' cached rows untouched - the source of truth for "what does this
+// overlay currently show" is always the last successful fetch or mutation.
+export async function saveGeoObjectsForOverlay(
+  overlayId: string,
+  entries: GeoObjectEntry[],
+): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(GEO_OBJECTS_TABLE_NAME, 'readwrite');
+      const store = transaction.objectStore(GEO_OBJECTS_TABLE_NAME);
+      const index = store.index(GEO_OBJECTS_OVERLAY_INDEX_NAME);
+      const cursorRequest = index.openCursor(IDBKeyRange.only(overlayId));
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (cursor) {
+          cursor.delete();
+          cursor.continue();
+        } else {
+          entries.forEach((entry) => store.put(entry));
+        }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch {
+    // IndexedDB unavailable (e.g. private browsing) - skip persistence
+  }
+}
+
+export function loadActiveOverlayId(): string | null {
+  return readValue(ACTIVE_OVERLAY_ID_STORAGE_KEY) || null;
+}
+
+export function saveActiveOverlayId(id: string | null): void {
+  writeValue(ACTIVE_OVERLAY_ID_STORAGE_KEY, id ?? '');
 }
 
 export function loadShowMarkerLabels(): boolean {

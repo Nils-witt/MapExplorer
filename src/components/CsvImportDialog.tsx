@@ -2,6 +2,7 @@ import { useMemo, useState, type ChangeEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
+import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -23,20 +24,23 @@ import type { SelectChangeEvent } from '@mui/material/Select';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
 import { parse as parsecsv } from 'csv-parse/browser/esm/sync';
-import { useMarkers } from '../context/MarkersContext';
-import type { LocalMarker } from '../types';
+import {
+  describeGeoObjectError,
+  useGeoObjects,
+} from '../context/GeoObjectsContext';
+import type { GeoObjectRequest } from '../api/serverApi';
 import VisuallyHiddenInput from './VisuallyHiddenInput';
 
-export const IMPORT_COLUMNS = ['id', 'name', 'lat', 'lng'] as const;
+export const IMPORT_COLUMNS = ['externalId', 'name', 'lat', 'lng'] as const;
 export interface ColumnMapping {
-  id: number | null;
+  externalId: number | null;
   name: number | null;
   lat: number | null;
   lng: number | null;
 }
 
 export interface MarkersImportResult {
-  markers: LocalMarker[];
+  rows: GeoObjectRequest[];
   skipped: number;
 }
 
@@ -52,7 +56,7 @@ export const CSV_DELIMITERS: { value: string; label: string }[] = [
 ];
 
 const FIELD_LABELS: Record<MappingField, string> = {
-  id: 'ID column',
+  externalId: 'External ID column (optional)',
   name: 'Name column',
   lat: 'Latitude column',
   lng: 'Longitude column',
@@ -64,18 +68,21 @@ interface CsvImportDialogProps {
 }
 
 export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
-  const { importMarkers } = useMarkers();
+  const { eligibleOverlays, isOnline, createGeoObject } = useGeoObjects();
 
+  const [targetOverlayId, setTargetOverlayId] = useState('');
   const [csvText, setCsvText] = useState('');
 
   const [delimiterChoice, setDelimiterChoice] = useState<string>(';');
   const [hasHeader, setHasHeader] = useState(true);
   const [mapping, setMapping] = useState<ColumnMapping>({
-    id: null,
+    externalId: null,
     name: null,
     lat: null,
     lng: null,
   });
+  const [importing, setImporting] = useState(false);
+  const [importSummary, setImportSummary] = useState<string | null>(null);
 
   const { rows: allRows, error: parseError } = useMemo(():
     { rows: string[][]; error: null } | { rows: []; error: string } => {
@@ -113,7 +120,8 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
     const text = await file.text();
     setCsvText(text);
     // Column indices from a previously loaded file don't apply to this one.
-    setMapping({ id: null, name: null, lat: null, lng: null });
+    setMapping({ externalId: null, name: null, lat: null, lng: null });
+    setImportSummary(null);
   };
 
   const columnCount = allRows.reduce(
@@ -130,16 +138,16 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
 
   const result = useMemo((): MarkersImportResult => {
     if (mapping.name === null || mapping.lat === null || mapping.lng === null) {
-      return { markers: [], skipped: dataRows.length };
+      return { rows: [], skipped: dataRows.length };
     }
     const nameIndex = mapping.name;
     const latIndex = mapping.lat;
     const lngIndex = mapping.lng;
-    const idIndex = mapping.id;
+    const externalIdIndex = mapping.externalId;
 
-    const markers: LocalMarker[] = [];
+    const rows: GeoObjectRequest[] = [];
     let skipped = 0;
-    dataRows.forEach((row, index) => {
+    dataRows.forEach((row) => {
       const name = (row[nameIndex] ?? '').trim();
       const lat = Number.parseFloat(row[latIndex] ?? '');
       const lng = Number.parseFloat(row[lngIndex] ?? '');
@@ -153,22 +161,20 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
         skipped += 1;
         return;
       }
-      const rawId = idIndex !== null ? (row[idIndex] ?? '').trim() : '';
-      markers.push({
-        id: rawId || `marker-${Date.now()}-${index}`,
+      const externalId =
+        externalIdIndex !== null ? (row[externalIdIndex] ?? '').trim() : '';
+      rows.push({
         name,
-        lat,
-        lng,
+        latitude: lat,
+        longitude: lng,
+        externalId: externalId || undefined,
       });
     });
-    return { markers, skipped };
+    return { rows, skipped };
   }, [dataRows, mapping]);
 
   const mappingComplete =
-    mapping.id !== null &&
-    mapping.name !== null &&
-    mapping.lat !== null &&
-    mapping.lng !== null;
+    mapping.name !== null && mapping.lat !== null && mapping.lng !== null;
 
   const handleDelimiterChange = (event: SelectChangeEvent) => {
     setDelimiterChoice(event.target.value);
@@ -183,16 +189,78 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
       }));
     };
 
-  const handleImport = () => {
-    importMarkers(result.markers);
-    onClose();
+  const handleImport = async () => {
+    if (!targetOverlayId) {
+      return;
+    }
+    setImporting(true);
+    setImportSummary(null);
+    let succeeded = 0;
+    let failed = 0;
+    for (const row of result.rows) {
+      try {
+        await createGeoObject(targetOverlayId, row);
+        succeeded += 1;
+      } catch (err) {
+        failed += 1;
+        if (failed === 1) {
+          setImportSummary(describeGeoObjectError(err));
+        }
+      }
+    }
+    setImporting(false);
+    if (failed === 0) {
+      onClose();
+    } else {
+      setImportSummary(
+        `${succeeded} marker${succeeded === 1 ? '' : 's'} imported, ${failed} failed.`,
+      );
+    }
   };
+
+  const importDisabled =
+    !mappingComplete ||
+    result.rows.length === 0 ||
+    !targetOverlayId ||
+    !isOnline ||
+    importing;
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>Import markers from CSV</DialogTitle>
       <DialogContent>
         <Stack spacing={2.5} sx={{ pt: 1 }}>
+          <FormControl
+            size="small"
+            fullWidth
+            disabled={eligibleOverlays.length === 0}
+          >
+            <InputLabel id="csv-target-map-label">Import to map</InputLabel>
+            <Select
+              labelId="csv-target-map-label"
+              label="Import to map"
+              value={targetOverlayId}
+              onChange={(event: SelectChangeEvent) =>
+                setTargetOverlayId(event.target.value)
+              }
+            >
+              {eligibleOverlays.map((overlay) => (
+                <MenuItem key={overlay.id} value={overlay.id}>
+                  {overlay.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {eligibleOverlays.length === 0 ? (
+            <Alert severity="info">
+              Enable a server map before importing markers.
+            </Alert>
+          ) : !isOnline ? (
+            <Alert severity="warning">
+              You&apos;re offline - importing requires a connection.
+            </Alert>
+          ) : null}
+
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <Button
               component="label"
@@ -303,18 +371,21 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
 
           {!mappingComplete && columnCount > 0 ? (
             <Alert severity="info">
-              Select a column for id, name, latitude, and longitude to continue.
+              Select a column for name, latitude, and longitude to continue.
             </Alert>
           ) : null}
           {mappingComplete ? (
-            <Alert severity={result.markers.length > 0 ? 'success' : 'warning'}>
-              {result.markers.length} marker
-              {result.markers.length === 1 ? '' : 's'} ready to import
+            <Alert severity={result.rows.length > 0 ? 'success' : 'warning'}>
+              {result.rows.length} marker
+              {result.rows.length === 1 ? '' : 's'} ready to import
               {result.skipped > 0
                 ? `, ${result.skipped} row${result.skipped === 1 ? '' : 's'} will be skipped (invalid data)`
                 : ''}
               .
             </Alert>
+          ) : null}
+          {importSummary ? (
+            <Alert severity="warning">{importSummary}</Alert>
           ) : null}
         </Stack>
       </DialogContent>
@@ -323,7 +394,8 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
         <Button
           variant="contained"
           onClick={handleImport}
-          disabled={!mappingComplete || result.markers.length === 0}
+          disabled={importDisabled}
+          startIcon={importing ? <CircularProgress size={14} /> : undefined}
         >
           Import
         </Button>

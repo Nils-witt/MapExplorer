@@ -90,3 +90,120 @@ export function tileUrlForMap(baseUrl: string, map: ServerMap): string {
 export function overlayIdForMap(map: ServerMap): string {
   return `server-${map.uuid}`;
 }
+
+export interface GeoObject {
+  uuid: string;
+  mapUuid: string;
+  version: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  externalId?: string;
+  street?: string;
+  housenumber?: string;
+  postcode?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+}
+
+export interface GeoObjectRequest {
+  name: string;
+  latitude: number;
+  longitude: number;
+  externalId?: string;
+  street?: string;
+  housenumber?: string;
+  postcode?: string;
+}
+
+function geoObjectsUrl(
+  baseUrl: string,
+  mapId: string,
+  version: string,
+  geoObjectId?: string,
+): string {
+  const base = `${normalizeBaseUrl(baseUrl)}/maps/${mapId}/version/${version}/geo-objects`;
+  return geoObjectId ? `${base}/${geoObjectId}` : base;
+}
+
+export async function listGeoObjects(
+  baseUrl: string,
+  mapId: string,
+  version: string,
+  token: string,
+): Promise<GeoObject[]> {
+  const response = await fetch(geoObjectsUrl(baseUrl, mapId, version), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new ServerApiError(await readErrorMessage(response), response.status);
+  }
+  return (await response.json()) as GeoObject[];
+}
+
+export async function createGeoObject(
+  baseUrl: string,
+  mapId: string,
+  version: string,
+  token: string,
+  body: GeoObjectRequest,
+): Promise<GeoObject> {
+  const response = await fetch(geoObjectsUrl(baseUrl, mapId, version), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new ServerApiError(await readErrorMessage(response), response.status);
+  }
+  return (await response.json()) as GeoObject;
+}
+
+export async function updateGeoObject(
+  baseUrl: string,
+  mapId: string,
+  version: string,
+  geoObjectId: string,
+  token: string,
+  body: GeoObjectRequest,
+): Promise<GeoObject> {
+  const response = await fetch(
+    geoObjectsUrl(baseUrl, mapId, version, geoObjectId),
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!response.ok) {
+    throw new ServerApiError(await readErrorMessage(response), response.status);
+  }
+  return (await response.json()) as GeoObject;
+}
+
+export async function deleteGeoObject(
+  baseUrl: string,
+  mapId: string,
+  version: string,
+  geoObjectId: string,
+  token: string,
+): Promise<void> {
+  const response = await fetch(
+    geoObjectsUrl(baseUrl, mapId, version, geoObjectId),
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  if (!response.ok) {
+    throw new ServerApiError(await readErrorMessage(response), response.status);
+  }
+}

@@ -1,3 +1,5 @@
+import type { GeoObject } from './api/serverApi';
+
 export interface Overlay {
   id: string;
   name: string;
@@ -9,6 +11,10 @@ export interface Overlay {
   // set, the authorization header is resolved live from that server's
   // current token instead of the (possibly stale) `authorizationHeader`.
   serverId?: string;
+  // Present only for overlays added from a server map. Identifies the map +
+  // version whose GeoObjects should be fetched alongside this overlay's tiles.
+  mapId?: string;
+  mapVersion?: string;
 }
 
 export interface MapPosition {
@@ -18,7 +24,22 @@ export interface MapPosition {
   pitch: number;
 }
 
-export interface LocalMarker {
+// A fetched GeoObject plus the overlay/server/map it was fetched under, kept
+// together so map/list rendering and cache rows don't need to re-resolve
+// that provenance on every read.
+export interface GeoObjectEntry {
+  geoObject: GeoObject;
+  overlayId: string;
+  serverId: string;
+  mapId: string;
+  mapVersion: string;
+  mapName: string;
+  serverBaseUrl: string;
+}
+
+// Shape of a legacy local marker, kept only for the one-time migration path
+// (reading old data out of the retired `markers` IndexedDB table).
+export interface LegacyLocalMarker {
   id: string;
   lng: number;
   lat: number;

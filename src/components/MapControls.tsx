@@ -17,9 +17,13 @@ export function MarkersListButtonControl({ onOpen }: { onOpen: () => void }) {
 export function AddMarkerButtonControl({
   active,
   onToggle,
+  disabled = false,
+  disabledReason,
 }: {
   active: boolean;
   onToggle: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   const control = useControl<MarkerControl>(() => new MarkerControl(onToggle), {
     position: 'top-left',
@@ -28,6 +32,10 @@ export function AddMarkerButtonControl({
   useEffect(() => {
     control.setActive(active);
   }, [control, active]);
+
+  useEffect(() => {
+    control.setDisabled(disabled, disabledReason);
+  }, [control, disabled, disabledReason]);
 
   return null;
 }

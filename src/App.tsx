@@ -17,6 +17,7 @@ import {
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import Alert from '@mui/material/Alert';
 import { SettingsDialog } from './components/SettingsDialog';
 import {
   AddMarkerButtonControl,
@@ -25,7 +26,12 @@ import {
 } from './components/MapControls';
 import { MarkersDialog } from './components/MarkersDialog';
 import { OverlaysProvider, useOverlays } from './context/OverlaysContext';
-import { MarkersProvider, useMarkers } from './context/MarkersContext';
+import {
+  GeoObjectsProvider,
+  describeGeoObjectError,
+  toGeoObjectRequest,
+  useGeoObjects,
+} from './context/GeoObjectsContext';
 import { ServersProvider, useServers } from './context/ServersContext';
 import {
   DEFAULT_OVERLAY_OPACITY,
@@ -62,7 +68,13 @@ const DEFAULT_MAP_POSITION = {
 function MapView() {
   const mapRef = useRef<MapRef | null>(null);
   const { overlays, overlaysRef } = useOverlays();
-  const { markers, addMarker, removeAllMarkers, moveMarker } = useMarkers();
+  const {
+    allGeoObjects,
+    activeOverlayId,
+    isOnline,
+    createGeoObject,
+    updateGeoObject,
+  } = useGeoObjects();
   const { serversRef } = useServers();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -78,6 +90,7 @@ function MapView() {
   const [showMarkerLabels, setShowMarkerLabels] = useState(() =>
     loadShowMarkerLabels(),
   );
+  const [mapActionError, setMapActionError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -102,13 +115,29 @@ function MapView() {
     saveShowMarkerLabels(showMarkerLabels);
   }, [showMarkerLabels]);
 
+  const addMarkerDisabled = !activeOverlayId || !isOnline;
+  const addMarkerDisabledReason = !isOnline
+    ? "You're offline"
+    : !activeOverlayId
+      ? 'Connect to a server and select a map to add markers'
+      : undefined;
+
   const handleMapClick = (event: MapLayerMouseEvent) => {
     if (!addingMarker) {
       return;
     }
-    const { lng, lat } = event.lngLat;
-    addMarker(lng, lat);
     setAddingMarker(false);
+    if (!activeOverlayId) {
+      return;
+    }
+    const { lng, lat } = event.lngLat;
+    createGeoObject(activeOverlayId, {
+      name: 'New marker',
+      latitude: lat,
+      longitude: lng,
+    }).catch((err) => {
+      setMapActionError(describeGeoObjectError(err));
+    });
   };
 
   const handleMoveEnd = (event: ViewStateChangeEvent) => {
@@ -116,20 +145,17 @@ function MapView() {
     saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });
   };
 
-  const handleRemoveAllMarkers = () => {
-    removeAllMarkers();
-    setSelectedMarkerId(null);
-  };
-
-  const handleLocateMarker = (id: string) => {
-    const marker = markers.find((candidate) => candidate.id === id);
-    setSelectedMarkerId(id);
+  const handleLocateMarker = (uuid: string) => {
+    const entry = allGeoObjects.find(
+      (candidate) => candidate.geoObject.uuid === uuid,
+    );
+    setSelectedMarkerId(uuid);
     const map = mapRef.current;
-    if (!marker || !map) {
+    if (!entry || !map) {
       return;
     }
     map.flyTo({
-      center: [marker.lng, marker.lat],
+      center: [entry.geoObject.longitude, entry.geoObject.latitude],
       zoom: Math.max(map.getZoom(), 14),
     });
   };
@@ -169,6 +195,8 @@ function MapView() {
         <AddMarkerButtonControl
           active={addingMarker}
           onToggle={() => setAddingMarker((prev) => !prev)}
+          disabled={addMarkerDisabled}
+          disabledReason={addMarkerDisabledReason}
         />
         <MarkersListButtonControl onOpen={() => setMarkersDialogOpen(true)} />
         <GeolocateControl
@@ -197,41 +225,67 @@ function MapView() {
               />
             </Source>
           ))}
-        {markers.map((marker) => (
+        {allGeoObjects.map((entry) => (
           <Marker
-            key={marker.id}
-            longitude={marker.lng}
-            latitude={marker.lat}
+            key={entry.geoObject.uuid}
+            longitude={entry.geoObject.longitude}
+            latitude={entry.geoObject.latitude}
             draggable
             onDragEnd={(event: MarkerDragEvent) =>
-              moveMarker(marker.id, event.lngLat.lng, event.lngLat.lat)
+              updateGeoObject(
+                entry.overlayId,
+                entry.geoObject.uuid,
+                toGeoObjectRequest(entry, {
+                  latitude: event.lngLat.lat,
+                  longitude: event.lngLat.lng,
+                }),
+              ).catch((err) => {
+                setMapActionError(describeGeoObjectError(err));
+              })
             }
           >
             <PlaceIcon
-              color={selectedMarkerId === marker.id ? 'error' : 'primary'}
+              color={
+                selectedMarkerId === entry.geoObject.uuid ? 'error' : 'primary'
+              }
               fontSize="large"
             />
           </Marker>
         ))}
         {showMarkerLabels
-          ? markers.map((marker) => (
+          ? allGeoObjects.map((entry) => (
               <Popup
-                key={marker.id}
-                longitude={marker.lng}
-                latitude={marker.lat}
+                key={entry.geoObject.uuid}
+                longitude={entry.geoObject.longitude}
+                latitude={entry.geoObject.latitude}
                 closeButton={false}
                 closeOnClick={false}
                 anchor="top"
                 offset={16}
                 className="marker-label-popup"
               >
-                {marker.name}
+                {entry.geoObject.name}
               </Popup>
             ))
           : null}
       </Map>
       {addingMarker ? (
         <div className="marker-hint">Click the map to place a marker</div>
+      ) : null}
+      {mapActionError ? (
+        <Alert
+          severity="error"
+          onClose={() => setMapActionError(null)}
+          sx={{
+            position: 'absolute',
+            bottom: 32,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1,
+          }}
+        >
+          {mapActionError}
+        </Alert>
       ) : null}
       <div className="copyright">© 2026 Nils Witt</div>
       <SettingsDialog
@@ -243,7 +297,6 @@ function MapView() {
       <MarkersDialog
         open={markersDialogOpen}
         onClose={() => setMarkersDialogOpen(false)}
-        onRemoveAll={handleRemoveAllMarkers}
         onLocate={handleLocateMarker}
         showMarkerLabels={showMarkerLabels}
         onShowMarkerLabelsChange={setShowMarkerLabels}
@@ -256,9 +309,9 @@ export function App() {
   return (
     <ServersProvider>
       <OverlaysProvider>
-        <MarkersProvider>
+        <GeoObjectsProvider>
           <MapView />
-        </MarkersProvider>
+        </GeoObjectsProvider>
       </OverlaysProvider>
     </ServersProvider>
   );
