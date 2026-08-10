@@ -22,7 +22,7 @@ import type { GeoObject, GeoObjectRequest } from '../api/serverApi';
 import {
   createGeoObject as apiCreateGeoObject,
   listGeoObjects,
-  listMaps,
+  listMapVersions,
 } from '../api/serverApi';
 import type { Overlay } from '../types';
 import {
@@ -30,6 +30,7 @@ import {
   useGeoObjects,
 } from '../context/GeoObjectsContext';
 import { useServers } from '../context/ServersContext';
+import { compareVersionsDesc } from '../lib/version';
 
 interface SyncMarkersDialogProps {
   open: boolean;
@@ -58,18 +59,6 @@ function dedupeKey(geoObject: GeoObject): string {
     return `ext:${geoObject.externalId}`;
   }
   return `pos:${geoObject.name.trim().toLowerCase()}:${geoObject.latitude.toFixed(6)}:${geoObject.longitude.toFixed(6)}`;
-}
-
-// Higher version first. Version strings are usually numeric, but fall back
-// to a plain string compare so a non-numeric scheme still sorts consistently
-// instead of throwing everything to the front.
-function compareVersionsDesc(a: string, b: string): number {
-  const na = Number(a);
-  const nb = Number(b);
-  if (!Number.isNaN(na) && !Number.isNaN(nb)) {
-    return nb - na;
-  }
-  return b.localeCompare(a);
 }
 
 export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
@@ -112,10 +101,10 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
     setSyncSummary(null);
   };
 
-  // Looks up the server's live `currentVersion` for this overlay's map and,
-  // when it differs from the locally cached `overlay.mapVersion`, treats
-  // both as "available" versions so the caller can offer a choice instead
-  // of requiring the version to be typed in blind.
+  // Looks up the server's full version history for this overlay's map and
+  // unions in the locally cached `overlay.mapVersion` (e.g. a pinned version
+  // not yet reflected there), so the caller can offer a choice instead of
+  // requiring the version to be typed in blind.
   const discoverVersions = async (
     overlay: Overlay | undefined,
     side: 'source' | 'target',
@@ -131,20 +120,20 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
     if (!server) {
       return;
     }
+    const mapId = overlay.mapId;
     const requestId = ++versionRequestIdRef.current[side];
     setLoading(true);
     try {
-      const maps = await callWithAuth(server.id, (t) =>
-        listMaps(server.baseUrl, t),
+      const serverVersions = await callWithAuth(server.id, (t) =>
+        listMapVersions(server.baseUrl, mapId, t),
       );
       if (versionRequestIdRef.current[side] !== requestId) {
         return;
       }
-      const match = maps.find((m) => m.uuid === overlay.mapId);
       const versions = Array.from(
         new Set(
-          [overlay.mapVersion, match?.currentVersion].filter((v): v is string =>
-            Boolean(v),
+          [...serverVersions.map((v) => v.version), overlay.mapVersion].filter(
+            (v): v is string => Boolean(v),
           ),
         ),
       ).sort(compareVersionsDesc);

@@ -15,6 +15,10 @@ export interface Overlay {
   // version whose GeoObjects should be fetched alongside this overlay's tiles.
   mapId?: string;
   mapVersion?: string;
+  // When true, `mapVersion` (and the tile URL) stay fixed to a
+  // user-chosen version instead of auto-following the server map's
+  // `currentVersion` on resync.
+  versionPinned?: boolean;
 }
 
 export interface MapPosition {

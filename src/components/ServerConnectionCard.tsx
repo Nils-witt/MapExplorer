@@ -4,13 +4,19 @@ import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import CircularProgress from '@mui/material/CircularProgress';
+import FormControl from '@mui/material/FormControl';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
+import InputLabel from '@mui/material/InputLabel';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
@@ -19,13 +25,15 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SyncIcon from '@mui/icons-material/Sync';
 import type { ServerConnection } from '../lib/storage';
-import type { ServerMap } from '../api/serverApi';
+import type { ServerMap, ServerMapVersion } from '../api/serverApi';
 import { useOverlays } from '../context/OverlaysContext';
 import { useServers } from '../context/ServersContext';
+import { compareVersionsDesc } from '../lib/version';
 import {
   DEFAULT_SERVER_BASE_URL,
   login,
   listMaps,
+  listMapVersions,
   overlayIdForMap,
   tileUrlForMap,
   ServerApiError,
@@ -57,6 +65,16 @@ export function ServerConnectionCard({
   const [signingIn, setSigningIn] = useState(false);
   const [loadingMaps, setLoadingMaps] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Versions known to exist per map, fetched lazily the first time a map's
+  // "pin to a specific version" switch is turned on. Undefined until fetched
+  // or if the fetch failed, in which case the version field falls back to
+  // free-text entry.
+  const [versionsByMap, setVersionsByMap] = useState<
+    Record<string, ServerMapVersion[]>
+  >({});
+  const [versionsLoadingMap, setVersionsLoadingMap] = useState<
+    Record<string, boolean>
+  >({});
 
   // A refreshed token doesn't retroactively update tiles MapLibre already
   // fetched under the old one - cycle the source so it re-fetches under the
@@ -146,7 +164,8 @@ export function ServerConnectionCard({
     }
     // Save the relation to this server instead of freezing the current
     // token - the authorization header is resolved live from the server's
-    // token on every tile request, so it never goes stale.
+    // token on every tile request, so it never goes stale. New maps always
+    // start following the live current version.
     onAddOverlay(
       map.name,
       tileUrlForMap(serverUrl, map),
@@ -155,36 +174,105 @@ export function ServerConnectionCard({
       overlayId,
       map.uuid,
       map.currentVersion,
+      false,
     );
   };
 
   const handleResync = (map: ServerMap) => {
+    const existing = overlays.find(
+      (overlay) => overlay.id === overlayIdForMap(map),
+    );
+    const pinned = Boolean(existing?.versionPinned && existing.mapVersion);
+    const version = pinned ? existing!.mapVersion! : map.currentVersion;
     onEditOverlay(
       overlayIdForMap(map),
       map.name,
-      tileUrlForMap(serverUrl, map),
+      tileUrlForMap(serverUrl, map, version),
       undefined,
       connection.id,
       map.uuid,
-      map.currentVersion,
+      version,
+      pinned,
+    );
+  };
+
+  const fetchVersionsForMap = async (map: ServerMap) => {
+    if (versionsByMap[map.uuid] || versionsLoadingMap[map.uuid]) {
+      return;
+    }
+    setVersionsLoadingMap((prev) => ({ ...prev, [map.uuid]: true }));
+    try {
+      const versions = await callWithAuth(connection.id, (t) =>
+        listMapVersions(serverUrl, map.uuid, t),
+      );
+      setVersionsByMap((prev) => ({ ...prev, [map.uuid]: versions }));
+    } catch {
+      // Leave undefined - the version field falls back to free-text entry.
+    } finally {
+      setVersionsLoadingMap((prev) => ({ ...prev, [map.uuid]: false }));
+    }
+  };
+
+  const handleToggleVersionPinned = (map: ServerMap, pinned: boolean) => {
+    const existing = overlays.find(
+      (overlay) => overlay.id === overlayIdForMap(map),
+    );
+    if (!existing) {
+      return;
+    }
+    if (pinned) {
+      void fetchVersionsForMap(map);
+    }
+    const version =
+      pinned && existing.mapVersion ? existing.mapVersion : map.currentVersion;
+    onEditOverlay(
+      overlayIdForMap(map),
+      map.name,
+      tileUrlForMap(serverUrl, map, version),
+      undefined,
+      connection.id,
+      map.uuid,
+      version,
+      pinned,
+    );
+  };
+
+  const handlePinnedVersionChange = (map: ServerMap, version: string) => {
+    onEditOverlay(
+      overlayIdForMap(map),
+      map.name,
+      tileUrlForMap(serverUrl, map, version),
+      undefined,
+      connection.id,
+      map.uuid,
+      version,
+      true,
     );
   };
 
   // Out of sync covers overlays added before server-linking existed (no
-  // `serverId` yet), maps whose tile URL changed (e.g. a version bump), and
-  // maps whose tracked version no longer matches the server's current one
-  // (the signal GeoObjects fetching uses to know it needs to refetch).
-  const outOfSyncMaps = (maps ?? []).filter((map) => {
+  // `serverId` yet) and maps whose tile URL no longer matches the version
+  // they're expected to be at - the live current version, unless the map is
+  // pinned to a specific one, in which case a server-side version bump
+  // shouldn't nudge the user back to latest.
+  const isMapOutOfSync = (map: ServerMap): boolean => {
     const existing = overlays.find(
       (overlay) => overlay.id === overlayIdForMap(map),
     );
+    if (!existing) {
+      return false;
+    }
+    const expectedVersion =
+      existing.versionPinned && existing.mapVersion
+        ? existing.mapVersion
+        : map.currentVersion;
     return (
-      existing !== undefined &&
-      (existing.serverId !== connection.id ||
-        existing.tiles[0] !== tileUrlForMap(serverUrl, map) ||
-        existing.mapVersion !== map.currentVersion)
+      existing.serverId !== connection.id ||
+      existing.tiles[0] !== tileUrlForMap(serverUrl, map, expectedVersion)
     );
-  });
+  };
+
+  const outOfSyncMaps = (maps ?? []).filter(isMapOutOfSync);
 
   const handleResyncAll = () => {
     outOfSyncMaps.forEach(handleResync);
@@ -325,44 +413,129 @@ export function ServerConnectionCard({
             const existing = overlays.find(
               (overlay) => overlay.id === overlayId,
             );
-            const outOfSync =
-              existing !== undefined &&
-              (existing.serverId !== connection.id ||
-                existing.tiles[0] !== tileUrlForMap(serverUrl, map) ||
-                existing.mapVersion !== map.currentVersion);
+            const outOfSync = isMapOutOfSync(map);
+            const pinned = Boolean(existing?.versionPinned);
+            const mapVersions = versionsByMap[map.uuid];
+            const mapVersionsLoading = versionsLoadingMap[map.uuid] ?? false;
             return (
               <ListItem
                 key={map.uuid}
                 disablePadding
-                sx={{ pr: outOfSync ? 5 : 0 }}
-                secondaryAction={
-                  outOfSync ? (
+                sx={{ flexDirection: 'column', alignItems: 'stretch' }}
+              >
+                <Stack direction="row" sx={{ alignItems: 'center' }}>
+                  <ListItemButton
+                    dense
+                    onClick={() => handleToggleMap(map)}
+                    sx={{ flex: 1 }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 0 }}>
+                      <Checkbox
+                        edge="start"
+                        tabIndex={-1}
+                        disableRipple
+                        checked={existing !== undefined}
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={map.name}
+                      secondary={
+                        pinned
+                          ? `pinned to version ${existing?.mapVersion}`
+                          : `version ${map.currentVersion}`
+                      }
+                    />
+                  </ListItemButton>
+                  {outOfSync ? (
                     <Tooltip title="Relink this overlay to this server">
                       <IconButton
                         edge="end"
                         aria-label={`Resync ${map.name}`}
                         onClick={() => handleResync(map)}
+                        sx={{ mr: 1 }}
                       >
                         <SyncIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                  ) : undefined
-                }
-              >
-                <ListItemButton dense onClick={() => handleToggleMap(map)}>
-                  <ListItemIcon sx={{ minWidth: 0 }}>
-                    <Checkbox
-                      edge="start"
-                      tabIndex={-1}
-                      disableRipple
-                      checked={existing !== undefined}
+                  ) : null}
+                </Stack>
+                {existing ? (
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    sx={{ alignItems: { sm: 'center' }, pl: 4, pb: 1 }}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={pinned}
+                          onChange={(event) =>
+                            handleToggleVersionPinned(map, event.target.checked)
+                          }
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" color="text.secondary">
+                          Pin to a specific version
+                        </Typography>
+                      }
                     />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={map.name}
-                    secondary={`version ${map.currentVersion}`}
-                  />
-                </ListItemButton>
+                    {pinned ? (
+                      mapVersions && mapVersions.length > 0 ? (
+                        <FormControl size="small" sx={{ minWidth: 140 }}>
+                          <InputLabel id={`version-label-${map.uuid}`}>
+                            Version
+                          </InputLabel>
+                          <Select
+                            labelId={`version-label-${map.uuid}`}
+                            label="Version"
+                            value={
+                              mapVersions.some(
+                                (v) => v.version === existing.mapVersion,
+                              )
+                                ? existing.mapVersion
+                                : ''
+                            }
+                            onChange={(event) =>
+                              handlePinnedVersionChange(map, event.target.value)
+                            }
+                          >
+                            {[...mapVersions]
+                              .sort((a, b) =>
+                                compareVersionsDesc(a.version, b.version),
+                              )
+                              .map((v) => (
+                                <MenuItem key={v.version} value={v.version}>
+                                  {v.version}
+                                </MenuItem>
+                              ))}
+                          </Select>
+                        </FormControl>
+                      ) : (
+                        <TextField
+                          key={existing.mapVersion}
+                          label="Version"
+                          size="small"
+                          defaultValue={existing.mapVersion ?? ''}
+                          onBlur={(event) => {
+                            const value = event.target.value.trim();
+                            if (value && value !== existing.mapVersion) {
+                              handlePinnedVersionChange(map, value);
+                            }
+                          }}
+                          slotProps={{
+                            input: {
+                              endAdornment: mapVersionsLoading ? (
+                                <CircularProgress size={14} />
+                              ) : undefined,
+                            },
+                          }}
+                        />
+                      )
+                    ) : null}
+                  </Stack>
+                ) : null}
               </ListItem>
             );
           })}
