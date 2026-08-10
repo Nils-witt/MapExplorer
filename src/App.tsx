@@ -21,6 +21,7 @@ import Alert from '@mui/material/Alert';
 import {
   AddMarkerButtonControl,
   MarkersListButtonControl,
+  SearchButtonControl,
   SettingsButtonControl,
 } from './components/MapControls';
 import { OverlaysProvider, useOverlays } from './context/OverlaysContext';
@@ -224,6 +225,36 @@ function MapView() {
     [allGeoObjects, showAllMarkers, selectedMarkerId],
   );
 
+  const searchableGeoObjects = useMemo(
+    () =>
+      allGeoObjects.map((entry) => {
+        const sublabel = [
+          entry.geoObject.street,
+          entry.geoObject.housenumber,
+          entry.geoObject.postcode,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const searchText = [
+          entry.geoObject.name,
+          entry.geoObject.street,
+          entry.geoObject.housenumber,
+          entry.geoObject.postcode,
+          entry.geoObject.externalId,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return {
+          uuid: entry.geoObject.uuid,
+          label: entry.geoObject.name,
+          sublabel,
+          searchText,
+        };
+      }),
+    [allGeoObjects],
+  );
+
   const enabledOverlaysTopFirst = useMemo(
     () => [...overlays].reverse().filter((overlay) => overlay.enabled),
     [overlays],
@@ -292,6 +323,10 @@ function MapView() {
             />
           </>
         ) : null}
+        <SearchButtonControl
+          items={searchableGeoObjects}
+          onSelect={handleLocateMarker}
+        />
         <GeolocateControl
           position="top-left"
           positionOptions={{ enableHighAccuracy: true }}
