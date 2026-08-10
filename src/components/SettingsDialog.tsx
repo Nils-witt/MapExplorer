@@ -201,7 +201,9 @@ export function SettingsDialog({
                   }
                 />
               }
-              label={<Typography variant="body2">Enable markers</Typography>}
+              label={
+                <Typography variant="body2">Enable marker editing</Typography>
+              }
             />
           </Stack>
 
