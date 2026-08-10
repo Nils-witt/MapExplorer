@@ -24,6 +24,7 @@ interface OverlaysContextValue {
     id?: string,
     mapId?: string,
     mapVersion?: string,
+    versionPinned?: boolean,
   ) => void;
   editOverlay: (
     id: string,
@@ -33,6 +34,7 @@ interface OverlaysContextValue {
     serverId?: string,
     mapId?: string,
     mapVersion?: string,
+    versionPinned?: boolean,
   ) => void;
   removeOverlay: (id: string) => void;
   toggleOverlay: (id: string) => void;
@@ -121,6 +123,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       id?: string,
       mapId?: string,
       mapVersion?: string,
+      versionPinned?: boolean,
     ) => {
       setOverlays((prev) => [
         ...prev,
@@ -133,6 +136,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
           serverId: serverId || undefined,
           mapId: mapId || undefined,
           mapVersion: mapVersion || undefined,
+          versionPinned: versionPinned ?? false,
         },
       ]);
     },
@@ -173,6 +177,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       serverId?: string,
       mapId?: string,
       mapVersion?: string,
+      versionPinned?: boolean,
     ) => {
       const tiles = tilesUrl
         .split(',')
@@ -192,6 +197,9 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
                 serverId: serverId || overlay.serverId,
                 mapId: mapId || overlay.mapId,
                 mapVersion: mapVersion || overlay.mapVersion,
+                // `??` (not `||`) so an explicit `false` (unpinning) is
+                // respected, while an omitted arg preserves the prior value.
+                versionPinned: versionPinned ?? overlay.versionPinned,
               }
             : overlay,
         ),

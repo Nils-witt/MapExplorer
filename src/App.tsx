@@ -21,6 +21,7 @@ import Alert from '@mui/material/Alert';
 import {
   AddMarkerButtonControl,
   MarkersListButtonControl,
+  SearchButtonControl,
   SettingsButtonControl,
 } from './components/MapControls';
 import { OverlaysProvider, useOverlays } from './context/OverlaysContext';
@@ -40,10 +41,12 @@ import {
 import {
   applyConfig,
   loadMapPosition,
+  loadMarkersEnabled,
   loadShowAllMarkers,
   loadShowMarkerLabels,
   loadStyleUrl,
   saveMapPosition,
+  saveMarkersEnabled,
   saveShowAllMarkers,
   saveShowMarkerLabels,
   saveStyleUrl,
@@ -114,6 +117,9 @@ function MapView() {
   const [showAllMarkers, setShowAllMarkers] = useState(() =>
     loadShowAllMarkers(),
   );
+  const [markersEnabled, setMarkersEnabled] = useState(() =>
+    loadMarkersEnabled(),
+  );
   const [mapActionError, setMapActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,6 +148,17 @@ function MapView() {
   useEffect(() => {
     saveShowAllMarkers(showAllMarkers);
   }, [showAllMarkers]);
+
+  useEffect(() => {
+    saveMarkersEnabled(markersEnabled);
+  }, [markersEnabled]);
+
+  useEffect(() => {
+    if (!markersEnabled) {
+      setAddingMarker(false);
+      setMarkersDialogOpen(false);
+    }
+  }, [markersEnabled]);
 
   const addMarkerDisabled = !activeOverlayId || !isOnline;
   const addMarkerDisabledReason = !isOnline
@@ -208,6 +225,36 @@ function MapView() {
     [allGeoObjects, showAllMarkers, selectedMarkerId],
   );
 
+  const searchableGeoObjects = useMemo(
+    () =>
+      allGeoObjects.map((entry) => {
+        const sublabel = [
+          entry.geoObject.street,
+          entry.geoObject.housenumber,
+          entry.geoObject.postcode,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const searchText = [
+          entry.geoObject.name,
+          entry.geoObject.street,
+          entry.geoObject.housenumber,
+          entry.geoObject.postcode,
+          entry.geoObject.externalId,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return {
+          uuid: entry.geoObject.uuid,
+          label: entry.geoObject.name,
+          sublabel,
+          searchText,
+        };
+      }),
+    [allGeoObjects],
+  );
+
   const enabledOverlaysTopFirst = useMemo(
     () => [...overlays].reverse().filter((overlay) => overlay.enabled),
     [overlays],
@@ -260,17 +307,25 @@ function MapView() {
         onMoveEnd={handleMoveEnd}
       >
         <NavigationControl position="top-left" />
-        <AddMarkerButtonControl
-          active={addingMarker}
-          onToggle={() => setAddingMarker((prev) => !prev)}
-          disabled={addMarkerDisabled}
-          disabledReason={addMarkerDisabledReason}
-        />
-        <MarkersListButtonControl
-          onOpen={() => {
-            setMarkersDialogLoaded(true);
-            setMarkersDialogOpen(true);
-          }}
+        {markersEnabled ? (
+          <>
+            <AddMarkerButtonControl
+              active={addingMarker}
+              onToggle={() => setAddingMarker((prev) => !prev)}
+              disabled={addMarkerDisabled}
+              disabledReason={addMarkerDisabledReason}
+            />
+            <MarkersListButtonControl
+              onOpen={() => {
+                setMarkersDialogLoaded(true);
+                setMarkersDialogOpen(true);
+              }}
+            />
+          </>
+        ) : null}
+        <SearchButtonControl
+          items={searchableGeoObjects}
+          onSelect={handleLocateMarker}
         />
         <GeolocateControl
           position="top-left"
@@ -373,10 +428,12 @@ function MapView() {
             onClose={() => setSettingsOpen(false)}
             styleUrl={styleUrl}
             onApplyStyle={setStyleUrl}
+            markersEnabled={markersEnabled}
+            onMarkersEnabledChange={setMarkersEnabled}
           />
         </Suspense>
       ) : null}
-      {markersDialogLoaded ? (
+      {markersEnabled && markersDialogLoaded ? (
         <Suspense fallback={null}>
           <MarkersDialog
             open={markersDialogOpen}

@@ -83,8 +83,32 @@ export async function listMaps(
   return (await response.json()) as ServerMap[];
 }
 
-export function tileUrlForMap(baseUrl: string, map: ServerMap): string {
-  return `${normalizeBaseUrl(baseUrl)}/maps/${map.uuid}/version/${map.currentVersion}/{z}/{x}/{y}.png`;
+export interface ServerMapVersion {
+  version: string;
+  createdAt?: string;
+}
+
+export async function listMapVersions(
+  baseUrl: string,
+  mapId: string,
+  token: string,
+): Promise<ServerMapVersion[]> {
+  const response = await fetch(
+    `${normalizeBaseUrl(baseUrl)}/maps/${mapId}/versions`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    throw new ServerApiError(await readErrorMessage(response), response.status);
+  }
+  return (await response.json()) as ServerMapVersion[];
+}
+
+export function tileUrlForMap(
+  baseUrl: string,
+  map: ServerMap,
+  version: string = map.currentVersion,
+): string {
+  return `${normalizeBaseUrl(baseUrl)}/maps/${map.uuid}/version/${version}/{z}/{x}/{y}.png`;
 }
 
 export function overlayIdForMap(map: ServerMap): string {

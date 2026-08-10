@@ -29,6 +29,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import PlaceIcon from '@mui/icons-material/Place';
 import SaveIcon from '@mui/icons-material/Save';
+import SyncIcon from '@mui/icons-material/Sync';
 import type { GeoObjectEntry } from '../types';
 
 import { MigrateMarkersBanner } from './MigrateMarkersBanner';
@@ -44,6 +45,11 @@ import EditLocationAltIcon from '@mui/icons-material/EditLocationAlt';
 // never use, so it's kept out of this dialog's own chunk until opened.
 const CsvImportDialog = lazy(() =>
   import('./CsvImportDialog').then((m) => ({ default: m.CsvImportDialog })),
+);
+const SyncMarkersDialog = lazy(() =>
+  import('./SyncMarkersDialog').then((m) => ({
+    default: m.SyncMarkersDialog,
+  })),
 );
 
 interface MarkersDialogProps {
@@ -89,6 +95,9 @@ export function MarkersDialog({
 
   const [importCsvOpen, setImportCsvOpen] = useState(false);
   const [importCsvLoaded, setImportCsvLoaded] = useState(false);
+
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncLoaded, setSyncLoaded] = useState(false);
 
   const startEdit = (entry: GeoObjectEntry) => {
     setEditingUuid(entry.geoObject.uuid);
@@ -394,6 +403,15 @@ export function MarkersDialog({
             Import CSV
           </Button>
           <CSVExportButton />
+          <Button
+            onClick={() => {
+              setSyncLoaded(true);
+              setSyncOpen(true);
+            }}
+            startIcon={<SyncIcon fontSize="small" />}
+          >
+            Sync markers
+          </Button>
           <Button onClick={handleDialogClose}>Close</Button>
         </Stack>
       </Box>
@@ -402,6 +420,14 @@ export function MarkersDialog({
           <CsvImportDialog
             open={importCsvOpen}
             onClose={() => setImportCsvOpen(false)}
+          />
+        </Suspense>
+      ) : null}
+      {syncLoaded ? (
+        <Suspense fallback={null}>
+          <SyncMarkersDialog
+            open={syncOpen}
+            onClose={() => setSyncOpen(false)}
           />
         </Suspense>
       ) : null}

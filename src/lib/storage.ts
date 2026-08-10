@@ -17,6 +17,7 @@ const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const MARKERS_STORAGE_KEY = 'mapexplorer.markers';
 const SHOW_MARKER_LABELS_STORAGE_KEY = 'mapexplorer.showMarkerLabels';
 const SHOW_ALL_MARKERS_STORAGE_KEY = 'mapexplorer.showAllMarkers';
+const MARKERS_ENABLED_STORAGE_KEY = 'mapexplorer.markersEnabled';
 const ACTIVE_OVERLAY_ID_STORAGE_KEY = 'mapexplorer.activeOverlayId';
 
 function readValue(key: string, fallback = ''): string {
@@ -513,4 +514,13 @@ export function loadShowAllMarkers(): boolean {
 
 export function saveShowAllMarkers(show: boolean): void {
   writeValue(SHOW_ALL_MARKERS_STORAGE_KEY, show ? 'true' : 'false');
+}
+
+export function loadMarkersEnabled(): boolean {
+  const stored = readValue(MARKERS_ENABLED_STORAGE_KEY);
+  return stored === '' ? false : stored === 'true';
+}
+
+export function saveMarkersEnabled(enabled: boolean): void {
+  writeValue(MARKERS_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
 }
