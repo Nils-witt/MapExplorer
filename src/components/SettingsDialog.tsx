@@ -16,8 +16,10 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
@@ -42,6 +44,8 @@ interface SettingsDialogProps {
   onClose: () => void;
   styleUrl: string;
   onApplyStyle: (url: string) => void;
+  markersEnabled: boolean;
+  onMarkersEnabledChange: (enabled: boolean) => void;
 }
 
 export function SettingsDialog({
@@ -49,6 +53,8 @@ export function SettingsDialog({
   onClose,
   styleUrl,
   onApplyStyle,
+  markersEnabled,
+  onMarkersEnabledChange,
 }: SettingsDialogProps) {
   const {
     overlays,
@@ -179,6 +185,24 @@ export function SettingsDialog({
             >
               Apply style
             </Button>
+          </Stack>
+
+          <Divider />
+
+          <Stack spacing={1}>
+            <Typography variant="subtitle1">Markers</Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={markersEnabled}
+                  onChange={(event) =>
+                    onMarkersEnabledChange(event.target.checked)
+                  }
+                />
+              }
+              label={<Typography variant="body2">Enable markers</Typography>}
+            />
           </Stack>
 
           <Divider />

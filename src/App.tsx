@@ -40,10 +40,12 @@ import {
 import {
   applyConfig,
   loadMapPosition,
+  loadMarkersEnabled,
   loadShowAllMarkers,
   loadShowMarkerLabels,
   loadStyleUrl,
   saveMapPosition,
+  saveMarkersEnabled,
   saveShowAllMarkers,
   saveShowMarkerLabels,
   saveStyleUrl,
@@ -114,6 +116,9 @@ function MapView() {
   const [showAllMarkers, setShowAllMarkers] = useState(() =>
     loadShowAllMarkers(),
   );
+  const [markersEnabled, setMarkersEnabled] = useState(() =>
+    loadMarkersEnabled(),
+  );
   const [mapActionError, setMapActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,6 +147,17 @@ function MapView() {
   useEffect(() => {
     saveShowAllMarkers(showAllMarkers);
   }, [showAllMarkers]);
+
+  useEffect(() => {
+    saveMarkersEnabled(markersEnabled);
+  }, [markersEnabled]);
+
+  useEffect(() => {
+    if (!markersEnabled) {
+      setAddingMarker(false);
+      setMarkersDialogOpen(false);
+    }
+  }, [markersEnabled]);
 
   const addMarkerDisabled = !activeOverlayId || !isOnline;
   const addMarkerDisabledReason = !isOnline
@@ -260,18 +276,22 @@ function MapView() {
         onMoveEnd={handleMoveEnd}
       >
         <NavigationControl position="top-left" />
-        <AddMarkerButtonControl
-          active={addingMarker}
-          onToggle={() => setAddingMarker((prev) => !prev)}
-          disabled={addMarkerDisabled}
-          disabledReason={addMarkerDisabledReason}
-        />
-        <MarkersListButtonControl
-          onOpen={() => {
-            setMarkersDialogLoaded(true);
-            setMarkersDialogOpen(true);
-          }}
-        />
+        {markersEnabled ? (
+          <>
+            <AddMarkerButtonControl
+              active={addingMarker}
+              onToggle={() => setAddingMarker((prev) => !prev)}
+              disabled={addMarkerDisabled}
+              disabledReason={addMarkerDisabledReason}
+            />
+            <MarkersListButtonControl
+              onOpen={() => {
+                setMarkersDialogLoaded(true);
+                setMarkersDialogOpen(true);
+              }}
+            />
+          </>
+        ) : null}
         <GeolocateControl
           position="top-left"
           positionOptions={{ enableHighAccuracy: true }}
@@ -373,10 +393,12 @@ function MapView() {
             onClose={() => setSettingsOpen(false)}
             styleUrl={styleUrl}
             onApplyStyle={setStyleUrl}
+            markersEnabled={markersEnabled}
+            onMarkersEnabledChange={setMarkersEnabled}
           />
         </Suspense>
       ) : null}
-      {markersDialogLoaded ? (
+      {markersEnabled && markersDialogLoaded ? (
         <Suspense fallback={null}>
           <MarkersDialog
             open={markersDialogOpen}
