@@ -11,7 +11,7 @@ import type { ReactNode, RefObject } from 'react';
 import type { ServerConnection } from '../lib/storage';
 import { loadServers, saveServers } from '../lib/storage';
 import type { AuthTokens } from '../api/serverApi';
-import { ServerApiError, refreshAccessToken } from '../api/serverApi';
+import { ServerApiError, listMaps, refreshAccessToken } from '../api/serverApi';
 
 interface ServersContextValue {
   servers: ServerConnection[];
@@ -30,6 +30,13 @@ interface ServersContextValue {
     serverId: string,
     call: (token: string) => Promise<T>,
   ) => Promise<T>;
+  // Message per server whose session was just force-cleared because its
+  // refresh token was missing or rejected - surfaced globally (not tied to
+  // whatever UI happened to trigger the failed call) so a token that expires
+  // silently, e.g. during the onLoad validation pass, still reaches the
+  // user. Cleared automatically once the server signs in again.
+  authErrors: Record<string, string>;
+  dismissAuthError: (serverId: string) => void;
 }
 
 const ServersContext = createContext<ServersContextValue | null>(null);
@@ -37,6 +44,7 @@ const ServersContext = createContext<ServersContextValue | null>(null);
 export function ServersProvider({ children }: { children: ReactNode }) {
   const [servers, setServers] = useState<ServerConnection[]>([]);
   const serversRef = useRef<ServerConnection[]>([]);
+  const [authErrors, setAuthErrors] = useState<Record<string, string>>({});
 
   // Servers live in IndexedDB, which is async, so the initial load happens
   // after mount. This gates the save effect below so it doesn't fire on the
@@ -68,6 +76,24 @@ export function ServersProvider({ children }: { children: ReactNode }) {
       }
       loadedRef.current = true;
       applyServers(() => loaded);
+      // Validate every stored session's access token as soon as the app
+      // loads, instead of waiting for something that uses it (a map tile
+      // request, an authenticated call) to fail first - tile requests in
+      // particular read the token straight off the server connection and
+      // never trigger a refresh themselves, so a token that expired while
+      // the app was closed would otherwise just serve broken tiles until
+      // the user happens to open Settings.
+      loaded.forEach((server) => {
+        if (!server.token) {
+          return;
+        }
+        callWithAuth(server.id, (t) => listMaps(server.baseUrl, t)).catch(
+          () => {
+            // callWithAuth already clears the session on a failed refresh -
+            // this call exists only to trigger that, nothing else to do.
+          },
+        );
+      });
     });
     return () => {
       cancelled = true;
@@ -103,9 +129,32 @@ export function ServersProvider({ children }: { children: ReactNode }) {
           server.id === id ? { ...server, ...patch } : server,
         ),
       );
+      // A fresh sign-in (or re-link) supersedes whatever auth error sent
+      // the user back to it.
+      if (patch.token) {
+        setAuthErrors((prev) => {
+          if (!(id in prev)) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }
     },
     [applyServers],
   );
+
+  const dismissAuthError = useCallback((serverId: string) => {
+    setAuthErrors((prev) => {
+      if (!(serverId in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[serverId];
+      return next;
+    });
+  }, []);
 
   const removeServer = useCallback(
     (id: string) => {
@@ -138,6 +187,10 @@ export function ServersProvider({ children }: { children: ReactNode }) {
         }
         if (!server.refreshToken) {
           updateServer(serverId, { token: '', refreshToken: '' });
+          setAuthErrors((prev) => ({
+            ...prev,
+            [serverId]: `Session for ${server.baseUrl} expired. Please sign in again.`,
+          }));
           throw err;
         }
         let refreshed: AuthTokens;
@@ -160,6 +213,10 @@ export function ServersProvider({ children }: { children: ReactNode }) {
           refreshed = await inFlight;
         } catch {
           updateServer(serverId, { token: '', refreshToken: '' });
+          setAuthErrors((prev) => ({
+            ...prev,
+            [serverId]: `Session for ${server.baseUrl} could not be refreshed. Please sign in again.`,
+          }));
           throw err;
         }
         return call(refreshed.token);
@@ -176,8 +233,18 @@ export function ServersProvider({ children }: { children: ReactNode }) {
       updateServer,
       removeServer,
       callWithAuth,
+      authErrors,
+      dismissAuthError,
     }),
-    [servers, addServer, updateServer, removeServer, callWithAuth],
+    [
+      servers,
+      addServer,
+      updateServer,
+      removeServer,
+      callWithAuth,
+      authErrors,
+      dismissAuthError,
+    ],
   );
 
   return (
