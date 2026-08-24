@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -93,6 +93,14 @@ export function MarkersDialog({
 
   const [syncOpen, setSyncOpen] = useState(false);
   const [syncLoaded, setSyncLoaded] = useState(false);
+
+  const sortedGeoObjects = useMemo(
+    () =>
+      [...allGeoObjects].sort((a, b) =>
+        a.geoObject.name.localeCompare(b.geoObject.name),
+      ),
+    [allGeoObjects],
+  );
 
   const handleDialogClose = () => {
     onClose();
@@ -260,7 +268,7 @@ export function MarkersDialog({
             </Typography>
           ) : (
             <List dense disablePadding>
-              {allGeoObjects.map((entry) => (
+              {sortedGeoObjects.map((entry) => (
                 <ListItem
                   key={entry.geoObject.uuid}
                   className="markers-list-row"
