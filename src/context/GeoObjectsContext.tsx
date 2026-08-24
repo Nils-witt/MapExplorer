@@ -114,6 +114,11 @@ export function GeoObjectsProvider({ children }: { children: ReactNode }) {
     serversRef.current = servers;
   }, [servers]);
 
+  const overlaysRef = useRef<Overlay[]>(overlays);
+  useEffect(() => {
+    overlaysRef.current = overlays;
+  }, [overlays]);
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -147,16 +152,27 @@ export function GeoObjectsProvider({ children }: { children: ReactNode }) {
 
   // Hydrate from the offline cache once on mount, independent of network -
   // this is what makes previously-seen GeoObjects visible immediately when
-  // opening the app offline.
+  // opening the app offline. Only entries for currently visible (enabled)
+  // overlays are loaded, so a disabled overlay's cached GeoObjects don't
+  // leak into state until something else fetches for it.
   useEffect(() => {
     let cancelled = false;
     loadCachedGeoObjects().then((cached) => {
       if (cancelled || cached.length === 0) {
         return;
       }
+      const visibleOverlayIds = new Set(
+        overlaysRef.current.filter(isEligibleOverlay).map((o) => o.id),
+      );
+      const visibleCached = cached.filter((entry) =>
+        visibleOverlayIds.has(entry.overlayId),
+      );
+      if (visibleCached.length === 0) {
+        return;
+      }
       applyGeoObjectsByOverlay((prev) => {
         const next = { ...prev };
-        cached.forEach((entry) => {
+        visibleCached.forEach((entry) => {
           next[entry.overlayId] = [...(next[entry.overlayId] ?? []), entry];
         });
         return next;

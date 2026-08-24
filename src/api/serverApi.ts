@@ -126,6 +126,8 @@ export interface GeoObject {
   street?: string;
   housenumber?: string;
   postcode?: string;
+  city?: string;
+  cityDistrict?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -140,6 +142,8 @@ export interface GeoObjectRequest {
   street?: string;
   housenumber?: string;
   postcode?: string;
+  city?: string;
+  cityDistrict?: string;
 }
 
 function geoObjectsUrl(

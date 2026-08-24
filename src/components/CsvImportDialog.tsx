@@ -31,16 +31,38 @@ import {
 import type { GeoObjectRequest } from '../api/serverApi';
 import VisuallyHiddenInput from './VisuallyHiddenInput';
 
-export const IMPORT_COLUMNS = ['externalId', 'name', 'lat', 'lng'] as const;
+export const IMPORT_COLUMNS = [
+  'id',
+  'externalId',
+  'name',
+  'lat',
+  'lng',
+  'street',
+  'housenumber',
+  'postcode',
+  'city',
+  'cityDistrict',
+] as const;
 export interface ColumnMapping {
+  id: number | null;
   externalId: number | null;
   name: number | null;
   lat: number | null;
   lng: number | null;
+  street: number | null;
+  housenumber: number | null;
+  postcode: number | null;
+  city: number | null;
+  cityDistrict: number | null;
+}
+
+export interface ImportRow {
+  id?: string;
+  request: GeoObjectRequest;
 }
 
 export interface MarkersImportResult {
-  rows: GeoObjectRequest[];
+  rows: ImportRow[];
   skipped: number;
 }
 
@@ -56,10 +78,16 @@ export const CSV_DELIMITERS: { value: string; label: string }[] = [
 ];
 
 const FIELD_LABELS: Record<MappingField, string> = {
+  id: 'ID column (optional - updates existing marker if set)',
   externalId: 'External ID column (optional)',
   name: 'Name column',
   lat: 'Latitude column',
   lng: 'Longitude column',
+  street: 'Street column (optional)',
+  housenumber: 'House number column (optional)',
+  postcode: 'Postcode column (optional)',
+  city: 'City column (optional)',
+  cityDistrict: 'City district column (optional)',
 };
 
 interface CsvImportDialogProps {
@@ -68,7 +96,8 @@ interface CsvImportDialogProps {
 }
 
 export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
-  const { eligibleOverlays, isOnline, createGeoObject } = useGeoObjects();
+  const { eligibleOverlays, isOnline, createGeoObject, updateGeoObject } =
+    useGeoObjects();
 
   const [targetOverlayId, setTargetOverlayId] = useState('');
   const [csvText, setCsvText] = useState('');
@@ -76,10 +105,16 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
   const [delimiterChoice, setDelimiterChoice] = useState<string>(';');
   const [hasHeader, setHasHeader] = useState(true);
   const [mapping, setMapping] = useState<ColumnMapping>({
+    id: null,
     externalId: null,
     name: null,
     lat: null,
     lng: null,
+    street: null,
+    housenumber: null,
+    postcode: null,
+    city: null,
+    cityDistrict: null,
   });
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState<string | null>(null);
@@ -120,7 +155,18 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
     const text = await file.text();
     setCsvText(text);
     // Column indices from a previously loaded file don't apply to this one.
-    setMapping({ externalId: null, name: null, lat: null, lng: null });
+    setMapping({
+      id: null,
+      externalId: null,
+      name: null,
+      lat: null,
+      lng: null,
+      street: null,
+      housenumber: null,
+      postcode: null,
+      city: null,
+      cityDistrict: null,
+    });
     setImportSummary(null);
   };
 
@@ -140,12 +186,21 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
     if (mapping.name === null || mapping.lat === null || mapping.lng === null) {
       return { rows: [], skipped: dataRows.length };
     }
+    const idIndex = mapping.id;
     const nameIndex = mapping.name;
     const latIndex = mapping.lat;
     const lngIndex = mapping.lng;
     const externalIdIndex = mapping.externalId;
+    const streetIndex = mapping.street;
+    const housenumberIndex = mapping.housenumber;
+    const postcodeIndex = mapping.postcode;
+    const cityIndex = mapping.city;
+    const cityDistrictIndex = mapping.cityDistrict;
 
-    const rows: GeoObjectRequest[] = [];
+    const optionalField = (row: string[], index: number | null) =>
+      index !== null ? (row[index] ?? '').trim() || undefined : undefined;
+
+    const rows: ImportRow[] = [];
     let skipped = 0;
     dataRows.forEach((row) => {
       const name = (row[nameIndex] ?? '').trim();
@@ -161,13 +216,19 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
         skipped += 1;
         return;
       }
-      const externalId =
-        externalIdIndex !== null ? (row[externalIdIndex] ?? '').trim() : '';
       rows.push({
-        name,
-        latitude: lat,
-        longitude: lng,
-        externalId: externalId || undefined,
+        id: optionalField(row, idIndex),
+        request: {
+          name,
+          latitude: lat,
+          longitude: lng,
+          externalId: optionalField(row, externalIdIndex),
+          street: optionalField(row, streetIndex),
+          housenumber: optionalField(row, housenumberIndex),
+          postcode: optionalField(row, postcodeIndex),
+          city: optionalField(row, cityIndex),
+          cityDistrict: optionalField(row, cityDistrictIndex),
+        },
       });
     });
     return { rows, skipped };
@@ -175,6 +236,11 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
 
   const mappingComplete =
     mapping.name !== null && mapping.lat !== null && mapping.lng !== null;
+
+  const updateCount = useMemo(
+    () => result.rows.filter((row) => row.id).length,
+    [result.rows],
+  );
 
   const handleDelimiterChange = (event: SelectChangeEvent) => {
     setDelimiterChoice(event.target.value);
@@ -199,7 +265,11 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
     let failed = 0;
     for (const row of result.rows) {
       try {
-        await createGeoObject(targetOverlayId, row);
+        if (row.id) {
+          await updateGeoObject(targetOverlayId, row.id, row.request);
+        } else {
+          await createGeoObject(targetOverlayId, row.request);
+        }
         succeeded += 1;
       } catch (err) {
         failed += 1;
@@ -378,6 +448,9 @@ export function CsvImportDialog({ open, onClose }: CsvImportDialogProps) {
             <Alert severity={result.rows.length > 0 ? 'success' : 'warning'}>
               {result.rows.length} marker
               {result.rows.length === 1 ? '' : 's'} ready to import
+              {updateCount > 0
+                ? ` (${updateCount} will update existing marker${updateCount === 1 ? '' : 's'}, ${result.rows.length - updateCount} new)`
+                : ''}
               {result.skipped > 0
                 ? `, ${result.skipped} row${result.skipped === 1 ? '' : 's'} will be skipped (invalid data)`
                 : ''}

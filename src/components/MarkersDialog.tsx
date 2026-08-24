@@ -1,5 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
-import type { FormEvent } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -19,7 +18,6 @@ import Select from '@mui/material/Select';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -28,14 +26,13 @@ import EditIcon from '@mui/icons-material/Edit';
 
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import PlaceIcon from '@mui/icons-material/Place';
-import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import type { GeoObjectEntry } from '../types';
 
+import { EditGeoObjectDialog } from './EditGeoObjectDialog';
 import { MigrateMarkersBanner } from './MigrateMarkersBanner';
 import {
   describeGeoObjectError,
-  toGeoObjectRequest,
   useGeoObjects,
 } from '../context/GeoObjectsContext';
 import CSVExportButton from './CSVExportButton';
@@ -84,11 +81,9 @@ export function MarkersDialog({
     activeOverlayId,
     setActiveOverlayId,
     isOnline,
-    updateGeoObject,
     deleteGeoObject,
   } = useGeoObjects();
-  const [editingUuid, setEditingUuid] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
+  const [editingEntry, setEditingEntry] = useState<GeoObjectEntry | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -99,35 +94,15 @@ export function MarkersDialog({
   const [syncOpen, setSyncOpen] = useState(false);
   const [syncLoaded, setSyncLoaded] = useState(false);
 
-  const startEdit = (entry: GeoObjectEntry) => {
-    setEditingUuid(entry.geoObject.uuid);
-    setEditName(entry.geoObject.name);
-  };
-
-  const cancelEdit = () => {
-    setEditingUuid(null);
-  };
-
-  const handleEditSubmit = async (event: FormEvent, entry: GeoObjectEntry) => {
-    event.preventDefault();
-    const name = editName.trim();
-    if (!name) {
-      return;
-    }
-    setEditingUuid(null);
-    try {
-      await updateGeoObject(
-        entry.overlayId,
-        entry.geoObject.uuid,
-        toGeoObjectRequest(entry, { name }),
-      );
-    } catch (err) {
-      setActionError(describeGeoObjectError(err));
-    }
-  };
+  const sortedGeoObjects = useMemo(
+    () =>
+      [...allGeoObjects].sort((a, b) =>
+        a.geoObject.name.localeCompare(b.geoObject.name),
+      ),
+    [allGeoObjects],
+  );
 
   const handleDialogClose = () => {
-    setEditingUuid(null);
     onClose();
   };
 
@@ -150,7 +125,7 @@ export function MarkersDialog({
     ) {
       return;
     }
-    setEditingUuid(null);
+    setEditingEntry(null);
     setDeletingAll(true);
     let failed = 0;
     for (const entry of allGeoObjects) {
@@ -293,101 +268,61 @@ export function MarkersDialog({
             </Typography>
           ) : (
             <List dense disablePadding>
-              {allGeoObjects.map((entry) =>
-                editingUuid === entry.geoObject.uuid ? (
-                  <ListItem
-                    key={entry.geoObject.uuid}
-                    disablePadding
-                    sx={{ display: 'block', py: 1 }}
-                  >
-                    <Stack
-                      component="form"
-                      direction="row"
-                      spacing={1}
-                      onSubmit={(event) => handleEditSubmit(event, entry)}
-                    >
-                      <TextField
-                        label="Name"
-                        size="small"
-                        fullWidth
-                        autoFocus
-                        value={editName}
-                        onChange={(event) => setEditName(event.target.value)}
-                      />
-                      <Button
-                        type="submit"
-                        variant="outlined"
-                        size="small"
-                        startIcon={<SaveIcon fontSize="small" />}
+              {sortedGeoObjects.map((entry) => (
+                <ListItem
+                  key={entry.geoObject.uuid}
+                  className="markers-list-row"
+                  disablePadding
+                  sx={{ pr: 10 }}
+                  secondaryAction={
+                    <Stack direction="row" spacing={0.5}>
+                      <IconButton
+                        edge="end"
+                        aria-label={`Move ${entry.geoObject.name}`}
+                        onClick={() => onRelocate(entry.geoObject.uuid)}
                       >
-                        Save
-                      </Button>
-                      <Button
-                        variant="text"
-                        size="small"
-                        onClick={cancelEdit}
-                        startIcon={<CloseIcon fontSize="small" />}
+                        <EditLocationAltIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        aria-label={`Edit ${entry.geoObject.name}`}
+                        onClick={() => setEditingEntry(entry)}
                       >
-                        Cancel
-                      </Button>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        aria-label={`Remove ${entry.geoObject.name}`}
+                        onClick={() => handleDelete(entry)}
+                        disabled={deletingUuid === entry.geoObject.uuid}
+                      >
+                        {deletingUuid === entry.geoObject.uuid ? (
+                          <CircularProgress size={16} />
+                        ) : (
+                          <DeleteIcon fontSize="small" />
+                        )}
+                      </IconButton>
                     </Stack>
-                  </ListItem>
-                ) : (
-                  <ListItem
-                    key={entry.geoObject.uuid}
-                    className="markers-list-row"
-                    disablePadding
-                    sx={{ pr: 10 }}
-                    secondaryAction={
-                      <Stack direction="row" spacing={0.5}>
-                        <IconButton
-                          edge="end"
-                          aria-label={`Move ${entry.geoObject.name}`}
-                          onClick={() => onRelocate(entry.geoObject.uuid)}
-                        >
-                          <EditLocationAltIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          edge="end"
-                          aria-label={`Rename ${entry.geoObject.name}`}
-                          onClick={() => startEdit(entry)}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          edge="end"
-                          aria-label={`Remove ${entry.geoObject.name}`}
-                          onClick={() => handleDelete(entry)}
-                          disabled={deletingUuid === entry.geoObject.uuid}
-                        >
-                          {deletingUuid === entry.geoObject.uuid ? (
-                            <CircularProgress size={16} />
-                          ) : (
-                            <DeleteIcon fontSize="small" />
-                          )}
-                        </IconButton>
-                      </Stack>
-                    }
+                  }
+                >
+                  <ListItemButton
+                    dense
+                    onClick={() => {
+                      onLocate(entry.geoObject.uuid);
+                    }}
                   >
-                    <ListItemButton
-                      dense
-                      onClick={() => {
-                        onLocate(entry.geoObject.uuid);
-                      }}
-                    >
-                      <PlaceIcon
-                        fontSize="small"
-                        color="action"
-                        sx={{ mr: 1.5 }}
-                      />
-                      <ListItemText
-                        primary={entry.geoObject.name}
-                        secondary={`${formatCoordinate(entry)} · ${entry.mapName} · ${entry.serverBaseUrl}`}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ),
-              )}
+                    <PlaceIcon
+                      fontSize="small"
+                      color="action"
+                      sx={{ mr: 1.5 }}
+                    />
+                    <ListItemText
+                      primary={entry.geoObject.name}
+                      secondary={`${formatCoordinate(entry)} · ${entry.mapName} · ${entry.serverBaseUrl}`}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
             </List>
           )}
         </Box>
@@ -431,6 +366,11 @@ export function MarkersDialog({
           />
         </Suspense>
       ) : null}
+      <EditGeoObjectDialog
+        open={editingEntry !== null}
+        entry={editingEntry}
+        onClose={() => setEditingEntry(null)}
+      />
     </Drawer>
   );
 }

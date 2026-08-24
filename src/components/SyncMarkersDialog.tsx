@@ -46,6 +46,8 @@ function toRequestFromGeoObject(geoObject: GeoObject): GeoObjectRequest {
     street: geoObject.street,
     housenumber: geoObject.housenumber,
     postcode: geoObject.postcode,
+    city: geoObject.city,
+    cityDistrict: geoObject.cityDistrict,
   };
 }
 
