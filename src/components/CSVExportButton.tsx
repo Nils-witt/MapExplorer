@@ -8,14 +8,34 @@ export function downloadMarkersCsv(entries: GeoObjectEntry[]): void {
   const csv = stringify(
     entries.map((entry) => ({
       uuid: entry.geoObject.uuid,
+      mapUuid: entry.geoObject.mapUuid,
+      version: entry.geoObject.version,
       name: entry.geoObject.name,
       lat: entry.geoObject.latitude,
       lng: entry.geoObject.longitude,
       externalId: entry.geoObject.externalId ?? '',
+      street: entry.geoObject.street ?? '',
+      housenumber: entry.geoObject.housenumber ?? '',
+      postcode: entry.geoObject.postcode ?? '',
+      city: entry.geoObject.city ?? '',
+      cityDistrict: entry.geoObject.cityDistrict ?? '',
     })),
     {
       header: true,
-      columns: ['uuid', 'name', 'lat', 'lng', 'externalId'],
+      columns: [
+        'uuid',
+        'mapUuid',
+        'version',
+        'name',
+        'lat',
+        'lng',
+        'externalId',
+        'street',
+        'housenumber',
+        'postcode',
+        'city',
+        'cityDistrict',
+      ],
     },
   );
 

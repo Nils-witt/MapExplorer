@@ -33,6 +33,8 @@ interface FormState {
   street: string;
   housenumber: string;
   postcode: string;
+  city: string;
+  cityDistrict: string;
 }
 
 function toFormState(entry: GeoObjectEntry): FormState {
@@ -44,6 +46,8 @@ function toFormState(entry: GeoObjectEntry): FormState {
     street: entry.geoObject.street ?? '',
     housenumber: entry.geoObject.housenumber ?? '',
     postcode: entry.geoObject.postcode ?? '',
+    city: entry.geoObject.city ?? '',
+    cityDistrict: entry.geoObject.cityDistrict ?? '',
   };
 }
 
@@ -101,6 +105,8 @@ export function EditGeoObjectDialog({
       street: form.street.trim() || undefined,
       housenumber: form.housenumber.trim() || undefined,
       postcode: form.postcode.trim() || undefined,
+      city: form.city.trim() || undefined,
+      cityDistrict: form.cityDistrict.trim() || undefined,
     };
     setSaving(true);
     setError(null);
@@ -181,12 +187,28 @@ export function EditGeoObjectDialog({
                 onChange={setField('housenumber')}
               />
             </Stack>
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="Postcode"
+                size="small"
+                fullWidth
+                value={form.postcode}
+                onChange={setField('postcode')}
+              />
+              <TextField
+                label="City"
+                size="small"
+                fullWidth
+                value={form.city}
+                onChange={setField('city')}
+              />
+            </Stack>
             <TextField
-              label="Postcode"
+              label="City district"
               size="small"
               fullWidth
-              value={form.postcode}
-              onChange={setField('postcode')}
+              value={form.cityDistrict}
+              onChange={setField('cityDistrict')}
             />
 
             <Divider />
