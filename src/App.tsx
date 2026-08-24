@@ -18,6 +18,7 @@ import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import Alert from '@mui/material/Alert';
+import Stack from '@mui/material/Stack';
 import {
   AddMarkerButtonControl,
   MarkersListButtonControl,
@@ -93,7 +94,7 @@ function MapView() {
     createGeoObject,
     updateGeoObject,
   } = useGeoObjects();
-  const { serversRef } = useServers();
+  const { serversRef, authErrors, dismissAuthError } = useServers();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Once true, stays true - lets the (lazy-loaded) dialog stay mounted
@@ -399,6 +400,29 @@ function MapView() {
             ))
           : null}
       </Map>
+      {Object.keys(authErrors).length > 0 ? (
+        <Stack
+          spacing={1}
+          sx={{
+            position: 'absolute',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1,
+            width: 'min(90vw, 420px)',
+          }}
+        >
+          {Object.entries(authErrors).map(([serverId, message]) => (
+            <Alert
+              key={serverId}
+              severity="error"
+              onClose={() => dismissAuthError(serverId)}
+            >
+              {message}
+            </Alert>
+          ))}
+        </Stack>
+      ) : null}
       {addingMarker ? (
         <div className="marker-hint">Click the map to place a marker</div>
       ) : null}
