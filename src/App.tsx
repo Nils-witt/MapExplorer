@@ -55,6 +55,12 @@ import {
 import PlaceIcon from '@mui/icons-material/Place';
 
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import {
+  authorizationCodeGrant,
+  Configuration,
+  discovery,
+} from 'openid-client';
+import { oauthConfig } from './lib/oauth2';
 
 setWorkerUrl(workerUrl);
 
@@ -475,7 +481,29 @@ function MapView() {
   );
 }
 
+const execOauth = async () => {
+  const issuer = oauthConfig.issuer;
+  const clientId = oauthConfig.clientId;
+
+  const config: Configuration = await discovery(new URL(issuer), clientId);
+  let code_verifier = localStorage.getItem('code_verifier') || '';
+
+  let currentUrl: URL = new URL(window.location.href);
+  let tokens = await authorizationCodeGrant(config, currentUrl, {
+    pkceCodeVerifier: code_verifier,
+    idTokenExpected: true,
+    expectedState: localStorage.getItem('state') || undefined,
+  });
+
+  console.log('Token Endpoint Response', tokens);
+};
+
 export function App() {
+  if (window.location.pathname === '/oauth/callback') {
+    execOauth();
+    return <div>OAuth callback received. Wait</div>;
+  }
+
   return (
     <ServersProvider>
       <OverlaysProvider>
