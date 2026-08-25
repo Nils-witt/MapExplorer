@@ -42,7 +42,7 @@
     "@mui/material": "^9.3.1",
     "@vis.gl/react-maplibre": "^8.1.2",
     "csv": "^6.6.3",
-    "maplibre-gl": "^6.4.0",
+    "maplibre-gl": "^6.5.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   }
