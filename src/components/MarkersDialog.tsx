@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
@@ -23,12 +24,13 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import EditIcon from '@mui/icons-material/Edit';
+import EditRoadIcon from '@mui/icons-material/EditRoad';
 
 import FileUploadIcon from '@mui/icons-material/FileUpload';
-import PlaceIcon from '@mui/icons-material/Place';
 import SyncIcon from '@mui/icons-material/Sync';
 import type { GeoObjectEntry } from '../types';
 
+import { BulkEditAddressDialog } from './BulkEditAddressDialog';
 import { EditGeoObjectDialog } from './EditGeoObjectDialog';
 import { MigrateMarkersBanner } from './MigrateMarkersBanner';
 import {
@@ -94,6 +96,10 @@ export function MarkersDialog({
   const [syncOpen, setSyncOpen] = useState(false);
   const [syncLoaded, setSyncLoaded] = useState(false);
 
+  const [selectedUuids, setSelectedUuids] = useState<Set<string>>(new Set());
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+
   const sortedGeoObjects = useMemo(
     () =>
       [...allGeoObjects].sort((a, b) =>
@@ -117,6 +123,75 @@ export function MarkersDialog({
     }
   };
 
+  const toggleSelected = (uuid: string) => {
+    setSelectedUuids((prev) => {
+      const next = new Set(prev);
+      if (next.has(uuid)) {
+        next.delete(uuid);
+      } else {
+        next.add(uuid);
+      }
+      return next;
+    });
+  };
+
+  const allSelected =
+    sortedGeoObjects.length > 0 &&
+    sortedGeoObjects.every((entry) => selectedUuids.has(entry.geoObject.uuid));
+
+  const toggleSelectAll = () => {
+    setSelectedUuids((prev) => {
+      if (allSelected) {
+        return new Set();
+      }
+      const next = new Set(prev);
+      for (const entry of sortedGeoObjects) {
+        next.add(entry.geoObject.uuid);
+      }
+      return next;
+    });
+  };
+
+  const selectedEntries = useMemo(
+    () =>
+      allGeoObjects.filter((entry) => selectedUuids.has(entry.geoObject.uuid)),
+    [allGeoObjects, selectedUuids],
+  );
+
+  const handleDeleteSelected = async () => {
+    if (selectedEntries.length === 0) {
+      return;
+    }
+    if (
+      !window.confirm(
+        `Delete ${selectedEntries.length} selected marker${selectedEntries.length === 1 ? '' : 's'}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setEditingEntry(null);
+    setDeletingSelected(true);
+    let failed = 0;
+    for (const entry of selectedEntries) {
+      try {
+        await deleteGeoObject(entry.overlayId, entry.geoObject.uuid);
+        setSelectedUuids((prev) => {
+          const next = new Set(prev);
+          next.delete(entry.geoObject.uuid);
+          return next;
+        });
+      } catch {
+        failed += 1;
+      }
+    }
+    setDeletingSelected(false);
+    if (failed > 0) {
+      setActionError(
+        `${failed} marker${failed === 1 ? '' : 's'} could not be deleted.`,
+      );
+    }
+  };
+
   const handleRemoveAll = async () => {
     if (
       !window.confirm(
@@ -126,6 +201,7 @@ export function MarkersDialog({
       return;
     }
     setEditingEntry(null);
+    setSelectedUuids(new Set());
     setDeletingAll(true);
     let failed = 0;
     for (const entry of allGeoObjects) {
@@ -260,6 +336,57 @@ export function MarkersDialog({
           </Box>
         ) : null}
         <Divider />
+        {allGeoObjects.length > 0 ? (
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ px: 2, py: 0.5, alignItems: 'center', flexWrap: 'wrap' }}
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={allSelected}
+                  indeterminate={selectedUuids.size > 0 && !allSelected}
+                  onChange={toggleSelectAll}
+                />
+              }
+              label={
+                <Typography variant="body2">
+                  {selectedUuids.size > 0
+                    ? `${selectedUuids.size} selected`
+                    : 'Select all'}
+                </Typography>
+              }
+            />
+            <Box sx={{ flex: 1 }} />
+            <Button
+              size="small"
+              onClick={() => setBulkEditOpen(true)}
+              disabled={selectedUuids.size === 0}
+              startIcon={<EditRoadIcon fontSize="small" />}
+            >
+              Edit address
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              onClick={handleDeleteSelected}
+              disabled={selectedUuids.size === 0 || deletingSelected}
+              startIcon={
+                deletingSelected ? (
+                  <CircularProgress size={14} />
+                ) : (
+                  <DeleteIcon fontSize="small" />
+                )
+              }
+            >
+              Delete selected
+            </Button>
+          </Stack>
+        ) : null}
+        <Divider />
         <Box sx={{ px: 2, py: 1.5, overflowY: 'auto', flex: 1 }}>
           {allGeoObjects.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
@@ -305,20 +432,26 @@ export function MarkersDialog({
                     </Stack>
                   }
                 >
+                  <Checkbox
+                    size="small"
+                    checked={selectedUuids.has(entry.geoObject.uuid)}
+                    onChange={() => toggleSelected(entry.geoObject.uuid)}
+                    onClick={(event) => event.stopPropagation()}
+                    slotProps={{
+                      input: {
+                        'aria-label': `Select ${entry.geoObject.name}`,
+                      },
+                    }}
+                  />
                   <ListItemButton
                     dense
                     onClick={() => {
                       onLocate(entry.geoObject.uuid);
                     }}
                   >
-                    <PlaceIcon
-                      fontSize="small"
-                      color="action"
-                      sx={{ mr: 1.5 }}
-                    />
                     <ListItemText
                       primary={entry.geoObject.name}
-                      secondary={`${formatCoordinate(entry)} · ${entry.mapName} · ${entry.serverBaseUrl}`}
+                      secondary={`${formatCoordinate(entry)} \n ${entry.mapName}`}
                     />
                   </ListItemButton>
                 </ListItem>
@@ -347,7 +480,6 @@ export function MarkersDialog({
           >
             Sync markers
           </Button>
-          <Button onClick={handleDialogClose}>Close</Button>
         </Stack>
       </Box>
       {importCsvLoaded ? (
@@ -370,6 +502,11 @@ export function MarkersDialog({
         open={editingEntry !== null}
         entry={editingEntry}
         onClose={() => setEditingEntry(null)}
+      />
+      <BulkEditAddressDialog
+        open={bulkEditOpen}
+        entries={selectedEntries}
+        onClose={() => setBulkEditOpen(false)}
       />
     </Drawer>
   );
