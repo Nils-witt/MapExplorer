@@ -64,6 +64,35 @@ export function toGeoObjectRequest(
   };
 }
 
+function normalizeStringField(value: string | undefined): string {
+  return (value ?? '').trim();
+}
+
+// A no-op edit (e.g. a bulk address edit re-applying a value a marker
+// already has) shouldn't cost a round trip or bump `updatedAt`/`updatedBy`
+// on the server for nothing.
+export function geoObjectRequestIsUnchanged(
+  entry: GeoObjectEntry,
+  req: GeoObjectRequest,
+): boolean {
+  const current = entry.geoObject;
+  return (
+    normalizeStringField(current.name) === normalizeStringField(req.name) &&
+    current.latitude === req.latitude &&
+    current.longitude === req.longitude &&
+    normalizeStringField(current.externalId) ===
+      normalizeStringField(req.externalId) &&
+    normalizeStringField(current.street) === normalizeStringField(req.street) &&
+    normalizeStringField(current.housenumber) ===
+      normalizeStringField(req.housenumber) &&
+    normalizeStringField(current.postcode) ===
+      normalizeStringField(req.postcode) &&
+    normalizeStringField(current.city) === normalizeStringField(req.city) &&
+    normalizeStringField(current.cityDistrict) ===
+      normalizeStringField(req.cityDistrict)
+  );
+}
+
 function isEligibleOverlay(overlay: Overlay): boolean {
   return Boolean(
     overlay.enabled && overlay.serverId && overlay.mapId && overlay.mapVersion,
@@ -422,6 +451,12 @@ export function GeoObjectsProvider({ children }: { children: ReactNode }) {
       uuid: string,
       req: GeoObjectRequest,
     ): Promise<GeoObjectEntry> => {
+      const currentEntry = geoObjectsByOverlayRef.current[overlayId]?.find(
+        (e) => e.geoObject.uuid === uuid,
+      );
+      if (currentEntry && geoObjectRequestIsUnchanged(currentEntry, req)) {
+        return currentEntry;
+      }
       const { overlay, mapId, mapVersion, server } = resolveOverlay(overlayId);
       const geoObject = await callWithAuth(server.id, (t) =>
         apiUpdateGeoObject(server.baseUrl, mapId, mapVersion, uuid, t, req),
