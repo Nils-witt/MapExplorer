@@ -10,6 +10,7 @@ import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
 import InputLabel from '@mui/material/InputLabel';
+import LinearProgress from '@mui/material/LinearProgress';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -98,6 +99,10 @@ export function MarkersDialog({
 
   const [selectedUuids, setSelectedUuids] = useState<Set<string>>(new Set());
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const [deleteSelectedProgress, setDeleteSelectedProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
 
   const sortedGeoObjects = useMemo(
@@ -171,7 +176,9 @@ export function MarkersDialog({
     }
     setEditingEntry(null);
     setDeletingSelected(true);
+    setDeleteSelectedProgress({ done: 0, total: selectedEntries.length });
     let failed = 0;
+    let done = 0;
     for (const entry of selectedEntries) {
       try {
         await deleteGeoObject(entry.overlayId, entry.geoObject.uuid);
@@ -183,8 +190,11 @@ export function MarkersDialog({
       } catch {
         failed += 1;
       }
+      done += 1;
+      setDeleteSelectedProgress({ done, total: selectedEntries.length });
     }
     setDeletingSelected(false);
+    setDeleteSelectedProgress(null);
     if (failed > 0) {
       setActionError(
         `${failed} marker${failed === 1 ? '' : 's'} could not be deleted.`,
@@ -359,6 +369,24 @@ export function MarkersDialog({
                 <DeleteIcon fontSize="small" />
               )}
             </IconButton>
+          </Stack>
+        ) : null}
+        {deleteSelectedProgress ? (
+          <Stack spacing={0.5} sx={{ px: 2, py: 0.5 }}>
+            <LinearProgress
+              variant="determinate"
+              value={
+                deleteSelectedProgress.total > 0
+                  ? (deleteSelectedProgress.done /
+                      deleteSelectedProgress.total) *
+                    100
+                  : 0
+              }
+            />
+            <Typography variant="body2" color="text.secondary">
+              Deleting {deleteSelectedProgress.done} of{' '}
+              {deleteSelectedProgress.total} markers…
+            </Typography>
           </Stack>
         ) : null}
         <Divider />

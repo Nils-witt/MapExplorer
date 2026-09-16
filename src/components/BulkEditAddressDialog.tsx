@@ -9,6 +9,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import LinearProgress from '@mui/material/LinearProgress';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
@@ -68,6 +69,10 @@ export function BulkEditAddressDialog({
   const [values, setValues] = useState<ValueState>(initialValues);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   const anyFieldSelected = FIELD_CONFIGS.some(({ field }) => apply[field]);
   const canSave = entries.length > 0 && anyFieldSelected && !saving;
@@ -79,6 +84,7 @@ export function BulkEditAddressDialog({
     setApply(initialApply);
     setValues(initialValues);
     setError(null);
+    setProgress(null);
     onClose();
   };
 
@@ -99,7 +105,9 @@ export function BulkEditAddressDialog({
     }
     setSaving(true);
     setError(null);
+    setProgress({ done: 0, total: entries.length });
     let failed = 0;
+    let done = 0;
     for (const entry of entries) {
       const request: GeoObjectRequest = {
         name: entry.geoObject.name,
@@ -127,8 +135,11 @@ export function BulkEditAddressDialog({
       } catch {
         failed += 1;
       }
+      done += 1;
+      setProgress({ done, total: entries.length });
     }
     setSaving(false);
+    setProgress(null);
     if (failed > 0) {
       setError(
         `${failed} of ${entries.length} marker${entries.length === 1 ? '' : 's'} could not be updated.`,
@@ -153,6 +164,21 @@ export function BulkEditAddressDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           {error ? <Alert severity="error">{error}</Alert> : null}
+          {progress ? (
+            <Stack spacing={0.5}>
+              <LinearProgress
+                variant="determinate"
+                value={
+                  progress.total > 0
+                    ? (progress.done / progress.total) * 100
+                    : 0
+                }
+              />
+              <Typography variant="body2" color="text.secondary">
+                Updating {progress.done} of {progress.total} markers…
+              </Typography>
+            </Stack>
+          ) : null}
           <Typography variant="body2" color="text.secondary">
             Check a field to apply its value to every selected marker. Leave a
             field unchecked to keep each marker&apos;s existing value.
