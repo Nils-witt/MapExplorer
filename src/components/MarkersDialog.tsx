@@ -22,7 +22,7 @@ import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
-import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import TuneIcon from '@mui/icons-material/Tune';
 import EditIcon from '@mui/icons-material/Edit';
 import EditRoadIcon from '@mui/icons-material/EditRoad';
 
@@ -88,7 +88,7 @@ export function MarkersDialog({
   const [editingEntry, setEditingEntry] = useState<GeoObjectEntry | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
-  const [deletingAll, setDeletingAll] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const [importCsvOpen, setImportCsvOpen] = useState(false);
   const [importCsvLoaded, setImportCsvLoaded] = useState(false);
@@ -192,33 +192,6 @@ export function MarkersDialog({
     }
   };
 
-  const handleRemoveAll = async () => {
-    if (
-      !window.confirm(
-        `Delete all ${allGeoObjects.length} marker${allGeoObjects.length === 1 ? '' : 's'}? This cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-    setEditingEntry(null);
-    setSelectedUuids(new Set());
-    setDeletingAll(true);
-    let failed = 0;
-    for (const entry of allGeoObjects) {
-      try {
-        await deleteGeoObject(entry.overlayId, entry.geoObject.uuid);
-      } catch {
-        failed += 1;
-      }
-    }
-    setDeletingAll(false);
-    if (failed > 0) {
-      setActionError(
-        `${failed} marker${failed === 1 ? '' : 's'} could not be deleted.`,
-      );
-    }
-  };
-
   return (
     <Drawer
       anchor="right"
@@ -246,11 +219,10 @@ export function MarkersDialog({
           <Typography variant="h6">Markers</Typography>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <IconButton
-              aria-label="Delete all markers"
-              onClick={handleRemoveAll}
-              disabled={allGeoObjects.length === 0 || deletingAll}
+              aria-label="Settings"
+              onClick={() => setShowSettings(!showSettings)}
             >
-              <DeleteSweepIcon fontSize="small" />
+              <TuneIcon fontSize="small" />
             </IconButton>
             <IconButton aria-label="Close" onClick={handleDialogClose}>
               <CloseIcon fontSize="small" />
@@ -279,62 +251,71 @@ export function MarkersDialog({
             {actionError}
           </Alert>
         ) : null}
-        <Box sx={{ px: 2, py: 0.5 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={showAllMarkers}
-                onChange={(event) =>
-                  onShowAllMarkersChange(event.target.checked)
+        {showSettings && (
+          <>
+            {' '}
+            <Box sx={{ px: 2, py: 0.5 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={showAllMarkers}
+                    onChange={(event) =>
+                      onShowAllMarkersChange(event.target.checked)
+                    }
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    Show all markers on map
+                  </Typography>
                 }
               />
-            }
-            label={
-              <Typography variant="body2">Show all markers on map</Typography>
-            }
-          />
-        </Box>
-        <Box sx={{ px: 2, py: 0.5 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={showMarkerLabels}
-                onChange={(event) =>
-                  onShowMarkerLabelsChange(event.target.checked)
+            </Box>
+            <Box sx={{ px: 2, py: 0.5 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={showMarkerLabels}
+                    onChange={(event) =>
+                      onShowMarkerLabelsChange(event.target.checked)
+                    }
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    Show marker names on map
+                  </Typography>
                 }
               />
-            }
-            label={
-              <Typography variant="body2">Show marker names on map</Typography>
-            }
-          />
-        </Box>
-        {eligibleOverlays.length > 0 ? (
-          <Box sx={{ px: 2, py: 0.5 }}>
-            <FormControl size="small" fullWidth>
-              <InputLabel id="add-marker-overlay-label">
-                Add markers to
-              </InputLabel>
-              <Select
-                labelId="add-marker-overlay-label"
-                label="Add markers to"
-                value={activeOverlayId ?? ''}
-                displayEmpty
-                onChange={(event: SelectChangeEvent) =>
-                  setActiveOverlayId(event.target.value || null)
-                }
-              >
-                {eligibleOverlays.map((overlay) => (
-                  <MenuItem key={overlay.id} value={overlay.id}>
-                    {overlay.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        ) : null}
+            </Box>
+            {eligibleOverlays.length > 0 ? (
+              <Box sx={{ px: 2, py: 0.5 }}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="add-marker-overlay-label">
+                    Add markers to
+                  </InputLabel>
+                  <Select
+                    labelId="add-marker-overlay-label"
+                    label="Add markers to"
+                    value={activeOverlayId ?? ''}
+                    displayEmpty
+                    onChange={(event: SelectChangeEvent) =>
+                      setActiveOverlayId(event.target.value || null)
+                    }
+                  >
+                    {eligibleOverlays.map((overlay) => (
+                      <MenuItem key={overlay.id} value={overlay.id}>
+                        {overlay.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            ) : null}
+          </>
+        )}
         <Divider />
         {allGeoObjects.length > 0 ? (
           <Stack
@@ -360,30 +341,24 @@ export function MarkersDialog({
                 </Typography>
               }
             />
-            <Box sx={{ flex: 1 }} />
-            <Button
-              size="small"
+            <IconButton
               onClick={() => setBulkEditOpen(true)}
               disabled={selectedUuids.size === 0}
-              startIcon={<EditRoadIcon fontSize="small" />}
             >
-              Edit address
-            </Button>
-            <Button
+              <EditRoadIcon fontSize="small" />
+            </IconButton>
+            <IconButton
               size="small"
               color="error"
               onClick={handleDeleteSelected}
               disabled={selectedUuids.size === 0 || deletingSelected}
-              startIcon={
-                deletingSelected ? (
-                  <CircularProgress size={14} />
-                ) : (
-                  <DeleteIcon fontSize="small" />
-                )
-              }
             >
-              Delete selected
-            </Button>
+              {deletingSelected ? (
+                <CircularProgress size={14} />
+              ) : (
+                <DeleteIcon fontSize="small" />
+              )}
+            </IconButton>
           </Stack>
         ) : null}
         <Divider />
