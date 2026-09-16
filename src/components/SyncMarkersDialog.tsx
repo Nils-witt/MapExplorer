@@ -11,6 +11,7 @@ import Divider from '@mui/material/Divider';
 import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import InputLabel from '@mui/material/InputLabel';
+import LinearProgress from '@mui/material/LinearProgress';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import type { SelectChangeEvent } from '@mui/material/Select';
@@ -92,6 +93,10 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
 
   const [syncing, setSyncing] = useState(false);
   const [syncSummary, setSyncSummary] = useState<string | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   const sourceOverlay = eligibleOverlays.find((o) => o.id === sourceOverlayId);
   const targetOverlay = eligibleOverlays.find((o) => o.id === targetOverlayId);
@@ -268,6 +273,7 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
 
     setSyncing(true);
     setSyncSummary(null);
+    setSyncProgress({ done: 0, total: toSync.length });
     let succeeded = 0;
     let failed = 0;
     let firstError: string | null = null;
@@ -298,8 +304,10 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
           firstError = describeGeoObjectError(err);
         }
       }
+      setSyncProgress({ done: succeeded + failed, total: toSync.length });
     }
     setSyncing(false);
+    setSyncProgress(null);
     if (failed === 0) {
       onClose();
     } else {
@@ -476,6 +484,22 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
                 : ''}
               . {toSync.length} will be synced.
             </Alert>
+          ) : null}
+
+          {syncProgress ? (
+            <Stack spacing={0.5}>
+              <LinearProgress
+                variant="determinate"
+                value={
+                  syncProgress.total > 0
+                    ? (syncProgress.done / syncProgress.total) * 100
+                    : 0
+                }
+              />
+              <Typography variant="body2" color="text.secondary">
+                Syncing {syncProgress.done} of {syncProgress.total} markers…
+              </Typography>
+            </Stack>
           ) : null}
 
           {syncSummary ? <Alert severity="warning">{syncSummary}</Alert> : null}
