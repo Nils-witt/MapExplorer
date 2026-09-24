@@ -12,6 +12,7 @@ import ServerMapsSettingsComponent from './ServerMapsSettingsComponent';
 import OverlaySettingsComponent from './OverlaySettingsComponent';
 import MarkerSettingsComponent from './MarkerSettingsComponent';
 import UserSettingsComponent from './UserSettingsComponent';
+import ConnectedServersSettings from './settings/ConnectedServersSettings.tsx';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -27,9 +28,14 @@ export function SettingsDialog({
   onApplyStyle,
 }: SettingsDialogProps) {
   type OpenTabs =
-    'mapSettings' | 'markers' | 'overlays' | 'serverMaps' | 'user';
+    | 'mapSettings'
+    | 'markers'
+    | 'overlays'
+    | 'serverMaps'
+    | 'user'
+    | 'connectedServers';
 
-  const [openTabs, setOpenTabs] = useState<OpenTabs>('mapSettings');
+  const [openTabs, setOpenTabs] = useState<OpenTabs>('user');
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -67,6 +73,14 @@ export function SettingsDialog({
             >
               User
             </Button>
+            <Button
+              variant={
+                openTabs === 'connectedServers' ? 'contained' : 'outlined'
+              }
+              onClick={() => setOpenTabs('connectedServers')}
+            >
+              Connected Servers
+            </Button>
           </Stack>
           <Box>
             <Stack sx={{ pt: 1 }}>
@@ -77,7 +91,7 @@ export function SettingsDialog({
                   onApplyStyle={onApplyStyle}
                 />
               )}
-
+              {openTabs === 'connectedServers' && <ConnectedServersSettings />}
               {openTabs === 'markers' && <MarkerSettingsComponent />}
 
               {openTabs === 'overlays' && (

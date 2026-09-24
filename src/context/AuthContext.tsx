@@ -8,7 +8,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserProfile } from 'oidc-client-ts';
-import { getOidcUser, getUserManager, startOidcLogin } from '../lib/oidc';
+import { getUserManager, renewOidcUser, startOidcLogin } from '../lib/oidc';
 
 interface AuthContextValue {
   // The full oidc-client-ts user, or null when signed out.
@@ -49,21 +49,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // manager, so its events keep this context in sync with them.
         const onLoaded = (loaded: User) => setUser(loaded);
         const onUnloaded = () => setUser(null);
+        // Renew shortly before the access token expires, and again once it
+        // has expired, which is the first chance after the device slept or a
+        // background tab's timers were throttled past the expiring event.
+        const renew = () => {
+          void renewOidcUser().then((renewed) => {
+            if (!cancelled) {
+              setUser(renewed);
+            }
+          });
+        };
         const { events } = userManager;
         events.addUserLoaded(onLoaded);
         events.addUserUnloaded(onUnloaded);
         events.addUserSignedOut(onUnloaded);
-        events.addAccessTokenExpired(onUnloaded);
+        events.addAccessTokenExpiring(renew);
+        events.addAccessTokenExpired(renew);
         unsubscribe = () => {
           events.removeUserLoaded(onLoaded);
           events.removeUserUnloaded(onUnloaded);
           events.removeUserSignedOut(onUnloaded);
-          events.removeAccessTokenExpired(onUnloaded);
+          events.removeAccessTokenExpiring(renew);
+          events.removeAccessTokenExpired(renew);
         };
 
-        const stored = await getOidcUser();
+        // Also arms the expiring/expired timers for the stored session.
+        const stored = await userManager.getUser();
+        // A session whose access token lapsed while the app was closed can
+        // still be renewed with its refresh token.
+        const current =
+          stored && !stored.expired ? stored : await renewOidcUser();
         if (!cancelled) {
-          setUser(stored);
+          setUser(current);
         }
       })
       .catch((err: unknown) => {

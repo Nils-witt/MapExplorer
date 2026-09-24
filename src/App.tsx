@@ -10,7 +10,7 @@ import {
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Navigate, Outlet, createBrowserRouter } from 'react-router';
+import { Navigate, Outlet, BrowserRouter, Routes, Route } from 'react-router';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -22,7 +22,7 @@ import {
 import { OverlaysProvider, useOverlays } from './context/OverlaysContext';
 import { GeoObjectsProvider, useGeoObjects } from './context/GeoObjectsContext';
 import { ServersProvider, useServers } from './context/ServersContext';
-import { useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   DEFAULT_OVERLAY_OPACITY,
   OVERLAY_LAYER_PREFIX,
@@ -40,6 +40,7 @@ import {
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import LoginPage from './pages/LoginPage.tsx';
 import LoginCallbackPage from './pages/LoginCallbackPage.tsx';
+import { ConnectedServersProvider } from './context/ConnectedServersContext.tsx';
 
 setWorkerUrl(workerUrl);
 
@@ -299,38 +300,35 @@ function RequireAuth() {
 
 // Providers live in a layout route so server/overlay/marker state survives
 // navigation between child routes.
-function AppLayout() {
+function DataProviders() {
   return (
-    <ServersProvider>
-      <OverlaysProvider>
-        <GeoObjectsProvider>
-          <Outlet />
-        </GeoObjectsProvider>
-      </OverlaysProvider>
-    </ServersProvider>
+    <ConnectedServersProvider>
+      <ServersProvider>
+        <OverlaysProvider>
+          <GeoObjectsProvider>
+            <Outlet />
+          </GeoObjectsProvider>
+        </OverlaysProvider>
+      </ServersProvider>
+    </ConnectedServersProvider>
   );
 }
 
-export const router = createBrowserRouter([
-  {
-    path: 'login',
-    element: <LoginPage />,
-  },
-  {
-    path: 'login/callback',
-    element: <LoginCallbackPage />,
-  },
-  {
-    element: <RequireAuth />,
-    children: [
-      {
-        path: '',
-        element: <AppLayout />,
-        children: [
-          { index: true, element: <MapView /> },
-          { path: '*', element: <Navigate to="/" replace /> },
-        ],
-      },
-    ],
-  },
-]);
+export function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path={'login'} element={<LoginPage />} />
+          <Route path={'login/callback'} element={<LoginCallbackPage />} />
+          <Route element={<RequireAuth />}>
+            <Route element={<DataProviders />}>
+              <Route index element={<MapView />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}

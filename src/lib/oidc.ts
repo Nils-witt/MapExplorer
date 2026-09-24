@@ -1,4 +1,8 @@
-import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
+import {
+  ErrorResponse,
+  UserManager,
+  WebStorageStateStore,
+} from 'oidc-client-ts';
 import type { User } from 'oidc-client-ts';
 
 // OIDC authorization-code flow with PKCE via oidc-client-ts, against the IdP
@@ -51,6 +55,9 @@ export function getUserManager(): Promise<UserManager> {
           // Keep the session across tabs and reloads; the in-flight login
           // state stays in sessionStorage (the library default).
           userStore: new WebStorageStateStore({ store: window.localStorage }),
+          // Renewal is driven by renewOidcUser instead, which also covers
+          // startup with an expired token and coordinates between tabs.
+          automaticSilentRenew: false,
         }),
     );
     // Let a later call retry, e.g. after config.json is fixed.
@@ -93,4 +100,57 @@ export function completeOidcLogin(search: string): Promise<User> {
 export async function getOidcUser(): Promise<User | null> {
   const user = await (await getUserManager()).getUser();
   return user && !user.expired ? user : null;
+}
+
+// Seconds of remaining access-token lifetime below which a renewal is due;
+// matches the library's default AccessTokenExpiring notification time.
+const RENEW_THRESHOLD_SECONDS = 60;
+
+let renewInFlight: Promise<User | null> | null = null;
+
+// Exchanges the stored refresh token for fresh tokens. Resolves to the
+// renewed user, or null when the session can no longer be renewed. Tabs share
+// the stored session, so renewals are serialized across tabs: with refresh
+// token rotation a second tab redeeming the same refresh token would fail,
+// so a tab that waited instead picks up the tokens the first tab stored.
+export function renewOidcUser(): Promise<User | null> {
+  if (!renewInFlight) {
+    renewInFlight = withRenewLock(renewStoredUser).finally(() => {
+      renewInFlight = null;
+    });
+  }
+  return renewInFlight;
+}
+
+function withRenewLock<T>(task: () => Promise<T>): Promise<T> {
+  if (!('locks' in navigator)) {
+    return task();
+  }
+  return navigator.locks.request('oidc-token-renewal', task);
+}
+
+async function renewStoredUser(): Promise<User | null> {
+  const userManager = await getUserManager();
+  const stored = await userManager.getUser();
+  if (!stored?.refresh_token) {
+    return stored && !stored.expired ? stored : null;
+  }
+  if ((stored.expires_in ?? 0) > RENEW_THRESHOLD_SECONDS) {
+    // Another tab renewed while this one waited for the lock.
+    return stored;
+  }
+  try {
+    return await userManager.signinSilent();
+  } catch (err) {
+    if (err instanceof ErrorResponse) {
+      // The IdP rejected the refresh token (revoked, expired session, ...),
+      // so retrying later is pointless.
+      await userManager.removeUser();
+      return null;
+    }
+    // Most likely offline; keep the stored session so a later attempt, e.g.
+    // after a reload, can still renew it.
+    console.warn('OIDC token renewal failed', err);
+    return stored.expired ? null : stored;
+  }
 }
