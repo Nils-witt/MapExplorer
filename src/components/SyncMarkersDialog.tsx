@@ -64,6 +64,85 @@ function dedupeKey(geoObject: GeoObject): string {
   return `pos:${geoObject.name.trim().toLowerCase()}:${geoObject.latitude.toFixed(6)}:${geoObject.longitude.toFixed(6)}`;
 }
 
+interface MapVersionFieldsProps {
+  label: string;
+  overlays: Overlay[];
+  overlayId: string;
+  onOverlayChange: (event: SelectChangeEvent) => void;
+  version: string;
+  onVersionChange: (version: string) => void;
+  availableVersions: string[];
+  versionsLoading: boolean;
+}
+
+function MapVersionFields({
+  label,
+  overlays,
+  overlayId,
+  onOverlayChange,
+  version,
+  onVersionChange,
+  availableVersions,
+  versionsLoading,
+}: MapVersionFieldsProps) {
+  return (
+    <Stack spacing={1.5} sx={{ flex: 1 }}>
+      <Typography variant="subtitle2">{label}</Typography>
+      <FormControl size="small" fullWidth disabled={overlays.length === 0}>
+        <InputLabel id={`sync-${label}-map-label`}>Map</InputLabel>
+        <Select
+          labelId={`sync-${label}-map-label`}
+          label="Map"
+          value={overlayId}
+          onChange={onOverlayChange}
+        >
+          {overlays.map((overlay: Overlay) => (
+            <MenuItem key={overlay.id} value={overlay.id}>
+              {overlay.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      {availableVersions.length > 1 ? (
+        <FormControl size="small" fullWidth>
+          <InputLabel id={`sync-${label}-version-label`}>Version</InputLabel>
+          <Select
+            labelId={`sync-${label}-version-label`}
+            label="Version"
+            value={availableVersions.includes(version) ? version : ''}
+            onChange={(event) => {
+              onVersionChange(event.target.value);
+            }}
+          >
+            {availableVersions.map((v) => (
+              <MenuItem key={v} value={v}>
+                {v}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      ) : (
+        <TextField
+          label="Version"
+          size="small"
+          fullWidth
+          value={version}
+          onChange={(event) => {
+            onVersionChange(event.target.value);
+          }}
+          slotProps={{
+            input: {
+              endAdornment: versionsLoading ? (
+                <CircularProgress size={14} />
+              ) : undefined,
+            },
+          }}
+        />
+      )}
+    </Stack>
+  );
+}
+
 export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
   const { eligibleOverlays, isOnline, createGeoObject } = useGeoObjects();
   const { servers, callWithAuth } = useServers();
@@ -319,77 +398,6 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
     }
   };
 
-  const renderMapVersionFields = (
-    label: string,
-    overlayId: string,
-    onOverlayChange: (event: SelectChangeEvent) => void,
-    version: string,
-    onVersionChange: (version: string) => void,
-    availableVersions: string[],
-    versionsLoading: boolean,
-  ) => (
-    <Stack spacing={1.5} sx={{ flex: 1 }}>
-      <Typography variant="subtitle2">{label}</Typography>
-      <FormControl
-        size="small"
-        fullWidth
-        disabled={eligibleOverlays.length === 0}
-      >
-        <InputLabel id={`sync-${label}-map-label`}>Map</InputLabel>
-        <Select
-          labelId={`sync-${label}-map-label`}
-          label="Map"
-          value={overlayId}
-          onChange={onOverlayChange}
-        >
-          {eligibleOverlays.map((overlay: Overlay) => (
-            <MenuItem key={overlay.id} value={overlay.id}>
-              {overlay.name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      {availableVersions.length > 1 ? (
-        <FormControl size="small" fullWidth>
-          <InputLabel id={`sync-${label}-version-label`}>Version</InputLabel>
-          <Select
-            labelId={`sync-${label}-version-label`}
-            label="Version"
-            value={availableVersions.includes(version) ? version : ''}
-            onChange={(event) => {
-              onVersionChange(event.target.value);
-              clearPreview();
-            }}
-          >
-            {availableVersions.map((v) => (
-              <MenuItem key={v} value={v}>
-                {v}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      ) : (
-        <TextField
-          label="Version"
-          size="small"
-          fullWidth
-          value={version}
-          onChange={(event) => {
-            onVersionChange(event.target.value);
-            clearPreview();
-          }}
-          slotProps={{
-            input: {
-              endAdornment: versionsLoading ? (
-                <CircularProgress size={14} />
-              ) : undefined,
-            },
-          }}
-        />
-      )}
-    </Stack>
-  );
-
   const handleDialogClose = () => {
     if (syncing || loading) {
       return;
@@ -417,24 +425,32 @@ export function SyncMarkersDialog({ open, onClose }: SyncMarkersDialogProps) {
           ) : null}
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            {renderMapVersionFields(
-              'From',
-              sourceOverlayId,
-              handleSourceOverlayChange,
-              sourceVersion,
-              setSourceVersion,
-              sourceVersions,
-              sourceVersionsLoading,
-            )}
-            {renderMapVersionFields(
-              'To',
-              targetOverlayId,
-              handleTargetOverlayChange,
-              targetVersion,
-              setTargetVersion,
-              targetVersions,
-              targetVersionsLoading,
-            )}
+            <MapVersionFields
+              label="From"
+              overlays={eligibleOverlays}
+              overlayId={sourceOverlayId}
+              onOverlayChange={handleSourceOverlayChange}
+              version={sourceVersion}
+              onVersionChange={(version) => {
+                setSourceVersion(version);
+                clearPreview();
+              }}
+              availableVersions={sourceVersions}
+              versionsLoading={sourceVersionsLoading}
+            />
+            <MapVersionFields
+              label="To"
+              overlays={eligibleOverlays}
+              overlayId={targetOverlayId}
+              onOverlayChange={handleTargetOverlayChange}
+              version={targetVersion}
+              onVersionChange={(version) => {
+                setTargetVersion(version);
+                clearPreview();
+              }}
+              availableVersions={targetVersions}
+              versionsLoading={targetVersionsLoading}
+            />
           </Stack>
 
           {sameSourceAndTarget ? (

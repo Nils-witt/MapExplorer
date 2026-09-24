@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -11,14 +11,13 @@ import { MapSettingsComponent } from './MapSettingsComponent';
 import ServerMapsSettingsComponent from './ServerMapsSettingsComponent';
 import OverlaySettingsComponent from './OverlaySettingsComponent';
 import MarkerSettingsComponent from './MarkerSettingsComponent';
+import UserSettingsComponent from './UserSettingsComponent';
 
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
   styleUrl: string;
   onApplyStyle: (url: string) => void;
-  markersEnabled: boolean;
-  onMarkersEnabledChange: (enabled: boolean) => void;
 }
 
 export function SettingsDialog({
@@ -26,18 +25,9 @@ export function SettingsDialog({
   onClose,
   styleUrl,
   onApplyStyle,
-  markersEnabled,
-  onMarkersEnabledChange,
 }: SettingsDialogProps) {
-  const [styleUrlDraft, setStyleUrlDraft] = useState(styleUrl);
-
-  useEffect(() => {
-    if (open) {
-      setStyleUrlDraft(styleUrl);
-    }
-  }, [open, styleUrl]);
-
-  type OpenTabs = 'mapSettings' | 'markers' | 'overlays' | 'serverMaps';
+  type OpenTabs =
+    'mapSettings' | 'markers' | 'overlays' | 'serverMaps' | 'user';
 
   const [openTabs, setOpenTabs] = useState<OpenTabs>('mapSettings');
 
@@ -71,28 +61,30 @@ export function SettingsDialog({
             >
               Server Maps
             </Button>
+            <Button
+              variant={openTabs === 'user' ? 'contained' : 'outlined'}
+              onClick={() => setOpenTabs('user')}
+            >
+              User
+            </Button>
           </Stack>
           <Box>
             <Stack sx={{ pt: 1 }}>
               {/* Map style settings */}
               {openTabs === 'mapSettings' && (
                 <MapSettingsComponent
-                  styleUrl={styleUrlDraft}
+                  styleUrl={styleUrl}
                   onApplyStyle={onApplyStyle}
                 />
               )}
 
-              {openTabs === 'markers' && (
-                <MarkerSettingsComponent
-                  markersEnabled={markersEnabled}
-                  onMarkersEnabledChange={onMarkersEnabledChange}
-                />
-              )}
+              {openTabs === 'markers' && <MarkerSettingsComponent />}
 
               {openTabs === 'overlays' && (
                 <OverlaySettingsComponent styleUrl={styleUrl} />
               )}
               {openTabs === 'serverMaps' && <ServerMapsSettingsComponent />}
+              {openTabs === 'user' && <UserSettingsComponent />}
             </Stack>
           </Box>
         </Stack>

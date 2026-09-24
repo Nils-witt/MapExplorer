@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -57,16 +57,22 @@ export function EditGeoObjectDialog({
   onClose,
 }: EditGeoObjectDialogProps) {
   const { updateGeoObject } = useGeoObjects();
-  const [form, setForm] = useState<FormState | null>(null);
+  const [form, setForm] = useState<FormState | null>(() =>
+    entry ? toFormState(entry) : null,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Reset the form when a different entry is opened; a null entry (dialog
+  // closing) keeps the old values visible during the close transition.
+  const [prevEntry, setPrevEntry] = useState(entry);
+  if (entry !== prevEntry) {
+    setPrevEntry(entry);
     if (entry) {
       setForm(toFormState(entry));
       setError(null);
     }
-  }, [entry]);
+  }
 
   const setField =
     (field: keyof FormState) =>

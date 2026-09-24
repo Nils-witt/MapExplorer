@@ -1,4 +1,6 @@
 {
   "defaultStyleUrl": "",
-  "defaultOverlaysServer": ""
+  "defaultOverlaysServer": "",
+  "oidcIssuer": "",
+  "oidcClientId": ""
 }

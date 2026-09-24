@@ -1,38 +1,28 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  MapLayerMouseEvent,
-  MapRef,
-  MarkerDragEvent,
-  ViewStateChangeEvent,
-} from '@vis.gl/react-maplibre';
+import type { MapRef, ViewStateChangeEvent } from '@vis.gl/react-maplibre';
 import {
   GeolocateControl,
   Layer,
   Map,
-  Marker,
   NavigationControl,
-  Popup,
   Source,
 } from '@vis.gl/react-maplibre';
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { Navigate, Outlet, createBrowserRouter } from 'react-router';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
 import {
-  AddMarkerButtonControl,
-  MarkersListButtonControl,
   SearchButtonControl,
   SettingsButtonControl,
 } from './components/MapControls';
 import { OverlaysProvider, useOverlays } from './context/OverlaysContext';
-import {
-  GeoObjectsProvider,
-  describeGeoObjectError,
-  toGeoObjectRequest,
-  useGeoObjects,
-} from './context/GeoObjectsContext';
+import { GeoObjectsProvider, useGeoObjects } from './context/GeoObjectsContext';
 import { ServersProvider, useServers } from './context/ServersContext';
+import { useAuth } from './context/AuthContext';
 import {
   DEFAULT_OVERLAY_OPACITY,
   OVERLAY_LAYER_PREFIX,
@@ -42,19 +32,14 @@ import {
 import {
   applyConfig,
   loadMapPosition,
-  loadMarkersEnabled,
-  loadShowAllMarkers,
-  loadShowMarkerLabels,
   loadStyleUrl,
   saveMapPosition,
-  saveMarkersEnabled,
-  saveShowAllMarkers,
-  saveShowMarkerLabels,
   saveStyleUrl,
 } from './lib/storage';
-import PlaceIcon from '@mui/icons-material/Place';
 
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import LoginPage from './pages/LoginPage.tsx';
+import LoginCallbackPage from './pages/LoginCallbackPage.tsx';
 
 setWorkerUrl(workerUrl);
 
@@ -65,11 +50,6 @@ setWorkerUrl(workerUrl);
 const SettingsDialog = lazy(() =>
   import('./components/SettingsDialog').then((m) => ({
     default: m.SettingsDialog,
-  })),
-);
-const MarkersDialog = lazy(() =>
-  import('./components/MarkersDialog').then((m) => ({
-    default: m.MarkersDialog,
   })),
 );
 
@@ -87,13 +67,7 @@ const DEFAULT_MAP_POSITION = {
 function MapView() {
   const mapRef = useRef<MapRef | null>(null);
   const { overlays, overlaysRef } = useOverlays();
-  const {
-    allGeoObjects,
-    activeOverlayId,
-    isOnline,
-    createGeoObject,
-    updateGeoObject,
-  } = useGeoObjects();
+  const { allGeoObjects } = useGeoObjects();
   const { serversRef, authErrors, dismissAuthError } = useServers();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -101,25 +75,11 @@ function MapView() {
   // across close/reopen so its close transition still animates, while still
   // deferring the initial chunk load until first opened.
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [markersDialogOpen, setMarkersDialogOpen] = useState(false);
-  const [markersDialogLoaded, setMarkersDialogLoaded] = useState(false);
   const [styleUrl, setStyleUrl] = useState(() =>
     loadStyleUrl(DEFAULT_STYLE_URL),
   );
-  const [addingMarker, setAddingMarker] = useState(false);
-  const [relocatingUuid, setRelocatingUuid] = useState<string | null>(null);
   const [initialPosition] = useState(
     () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
-  );
-  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
-  const [showMarkerLabels, setShowMarkerLabels] = useState(() =>
-    loadShowMarkerLabels(),
-  );
-  const [showAllMarkers, setShowAllMarkers] = useState(() =>
-    loadShowAllMarkers(),
-  );
-  const [markersEnabled, setMarkersEnabled] = useState(() =>
-    loadMarkersEnabled(),
   );
   const [mapActionError, setMapActionError] = useState<string | null>(null);
 
@@ -142,89 +102,10 @@ function MapView() {
     saveStyleUrl(styleUrl);
   }, [styleUrl]);
 
-  useEffect(() => {
-    saveShowMarkerLabels(showMarkerLabels);
-  }, [showMarkerLabels]);
-
-  useEffect(() => {
-    saveShowAllMarkers(showAllMarkers);
-  }, [showAllMarkers]);
-
-  useEffect(() => {
-    saveMarkersEnabled(markersEnabled);
-  }, [markersEnabled]);
-
-  useEffect(() => {
-    if (!markersEnabled) {
-      setAddingMarker(false);
-      setMarkersDialogOpen(false);
-    }
-  }, [markersEnabled]);
-
-  const addMarkerDisabled = !activeOverlayId || !isOnline;
-  const addMarkerDisabledReason = !isOnline
-    ? "You're offline"
-    : !activeOverlayId
-      ? 'Connect to a server and select a map to add markers'
-      : undefined;
-
-  const handleMapClick = (event: MapLayerMouseEvent) => {
-    if (relocatingUuid) {
-      const uuid = relocatingUuid;
-      setRelocatingUuid(null);
-      const entry = allGeoObjects.find(
-        (candidate) => candidate.geoObject.uuid === uuid,
-      );
-      if (!entry) {
-        return;
-      }
-      const { lng, lat } = event.lngLat;
-      updateGeoObject(
-        entry.overlayId,
-        entry.geoObject.uuid,
-        toGeoObjectRequest(entry, { latitude: lat, longitude: lng }),
-      ).catch((err) => {
-        setMapActionError(describeGeoObjectError(err));
-      });
-      return;
-    }
-    if (!addingMarker) {
-      return;
-    }
-    setAddingMarker(false);
-    if (!activeOverlayId) {
-      return;
-    }
-    const { lng, lat } = event.lngLat;
-    createGeoObject(activeOverlayId, {
-      name: 'New marker',
-      latitude: lat,
-      longitude: lng,
-    }).catch((err) => {
-      setMapActionError(describeGeoObjectError(err));
-    });
-  };
-
-  const handleRelocateMarker = (uuid: string) => {
-    setAddingMarker(false);
-    setSelectedMarkerId(uuid);
-    setRelocatingUuid(uuid);
-  };
-
   const handleMoveEnd = (event: ViewStateChangeEvent) => {
     const { longitude, latitude, zoom, bearing, pitch } = event.viewState;
     saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });
   };
-
-  const visibleGeoObjects = useMemo(
-    () =>
-      showAllMarkers
-        ? allGeoObjects
-        : allGeoObjects.filter(
-            (entry) => entry.geoObject.uuid === selectedMarkerId,
-          ),
-    [allGeoObjects, showAllMarkers, selectedMarkerId],
-  );
 
   const searchableGeoObjects = useMemo(
     () =>
@@ -265,7 +146,6 @@ function MapView() {
     const entry = allGeoObjects.find(
       (candidate) => candidate.geoObject.uuid === uuid,
     );
-    setSelectedMarkerId(uuid);
     const map = mapRef.current;
     if (!entry || !map) {
       return;
@@ -288,7 +168,6 @@ function MapView() {
           pitch: initialPosition.pitch,
         }}
         mapStyle={styleUrl}
-        cursor={addingMarker || relocatingUuid ? 'crosshair' : undefined}
         style={{ position: 'absolute', inset: 0 }}
         transformRequest={(
           url: string,
@@ -304,26 +183,10 @@ function MapView() {
           }
           return { url, headers: { Authorization: authorizationHeader } };
         }}
-        onClick={handleMapClick}
+        onClick={() => void 0}
         onMoveEnd={handleMoveEnd}
       >
         <NavigationControl position="top-left" />
-        {markersEnabled ? (
-          <>
-            <AddMarkerButtonControl
-              active={addingMarker}
-              onToggle={() => setAddingMarker((prev) => !prev)}
-              disabled={addMarkerDisabled}
-              disabledReason={addMarkerDisabledReason}
-            />
-            <MarkersListButtonControl
-              onOpen={() => {
-                setMarkersDialogLoaded(true);
-                setMarkersDialogOpen(true);
-              }}
-            />
-          </>
-        ) : null}
         <SearchButtonControl
           items={searchableGeoObjects}
           onSelect={handleLocateMarker}
@@ -356,49 +219,6 @@ function MapView() {
             />
           </Source>
         ))}
-        {visibleGeoObjects.map((entry) => (
-          <Marker
-            key={entry.geoObject.uuid}
-            longitude={entry.geoObject.longitude}
-            latitude={entry.geoObject.latitude}
-            draggable
-            onDragEnd={(event: MarkerDragEvent) =>
-              updateGeoObject(
-                entry.overlayId,
-                entry.geoObject.uuid,
-                toGeoObjectRequest(entry, {
-                  latitude: event.lngLat.lat,
-                  longitude: event.lngLat.lng,
-                }),
-              ).catch((err) => {
-                setMapActionError(describeGeoObjectError(err));
-              })
-            }
-          >
-            <PlaceIcon
-              color={
-                selectedMarkerId === entry.geoObject.uuid ? 'error' : 'primary'
-              }
-              fontSize="large"
-            />
-          </Marker>
-        ))}
-        {showMarkerLabels
-          ? visibleGeoObjects.map((entry) => (
-              <Popup
-                key={entry.geoObject.uuid}
-                longitude={entry.geoObject.longitude}
-                latitude={entry.geoObject.latitude}
-                closeButton={false}
-                closeOnClick={false}
-                anchor="top"
-                offset={16}
-                className="marker-label-popup"
-              >
-                {entry.geoObject.name}
-              </Popup>
-            ))
-          : null}
       </Map>
       {Object.keys(authErrors).length > 0 ? (
         <Stack
@@ -423,12 +243,6 @@ function MapView() {
           ))}
         </Stack>
       ) : null}
-      {addingMarker ? (
-        <div className="marker-hint">Click the map to place a marker</div>
-      ) : null}
-      {relocatingUuid ? (
-        <div className="marker-hint">Click the map to move the marker</div>
-      ) : null}
       {mapActionError ? (
         <Alert
           severity="error"
@@ -452,22 +266,6 @@ function MapView() {
             onClose={() => setSettingsOpen(false)}
             styleUrl={styleUrl}
             onApplyStyle={setStyleUrl}
-            markersEnabled={markersEnabled}
-            onMarkersEnabledChange={setMarkersEnabled}
-          />
-        </Suspense>
-      ) : null}
-      {markersEnabled && markersDialogLoaded ? (
-        <Suspense fallback={null}>
-          <MarkersDialog
-            open={markersDialogOpen}
-            onClose={() => setMarkersDialogOpen(false)}
-            onLocate={handleLocateMarker}
-            onRelocate={handleRelocateMarker}
-            showMarkerLabels={showMarkerLabels}
-            onShowMarkerLabelsChange={setShowMarkerLabels}
-            showAllMarkers={showAllMarkers}
-            onShowAllMarkersChange={setShowAllMarkers}
           />
         </Suspense>
       ) : null}
@@ -475,14 +273,64 @@ function MapView() {
   );
 }
 
-export function App() {
+// Sends signed-out users to the login page. Waits for the stored session to
+// be read first, so a reload doesn't bounce a signed-in user to /login.
+function RequireAuth() {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Outlet />;
+}
+
+// Providers live in a layout route so server/overlay/marker state survives
+// navigation between child routes.
+function AppLayout() {
   return (
     <ServersProvider>
       <OverlaysProvider>
         <GeoObjectsProvider>
-          <MapView />
+          <Outlet />
         </GeoObjectsProvider>
       </OverlaysProvider>
     </ServersProvider>
   );
 }
+
+export const router = createBrowserRouter([
+  {
+    path: 'login',
+    element: <LoginPage />,
+  },
+  {
+    path: 'login/callback',
+    element: <LoginCallbackPage />,
+  },
+  {
+    element: <RequireAuth />,
+    children: [
+      {
+        path: '',
+        element: <AppLayout />,
+        children: [
+          { index: true, element: <MapView /> },
+          { path: '*', element: <Navigate to="/" replace /> },
+        ],
+      },
+    ],
+  },
+]);
