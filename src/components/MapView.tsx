@@ -2,8 +2,10 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { MapRef, ViewStateChangeEvent } from '@vis.gl/react-maplibre';
 import {
   GeolocateControl,
+  Layer,
   Map,
   NavigationControl,
+  Source,
 } from '@vis.gl/react-maplibre';
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
@@ -11,6 +13,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import Alert from '@mui/material/Alert';
 import { SearchButtonControl } from './mapControls/SearchButtonControl';
 import { SettingsButtonControl } from './mapControls/SettingsButtonControl';
+import { useAuth } from '../context/AuthContext';
+import { useConnectedServers } from '../context/ConnectedServersContext';
+import { useOverlays } from '../context/OverlaysContext';
 
 import {
   applyConfig,
@@ -46,6 +51,16 @@ const DEFAULT_MAP_POSITION = {
 
 export function MapView() {
   const mapRef = useRef<MapRef | null>(null);
+  const { accessToken } = useAuth();
+  const { overlayServers } = useConnectedServers();
+  const { enabledOverlays } = useOverlays();
+
+  // transformRequest is only read when the map is created, so it looks the
+  // token and servers up through a ref to always see the current values.
+  const authRef = useRef({ accessToken, overlayServers });
+  useEffect(() => {
+    authRef.current = { accessToken, overlayServers };
+  }, [accessToken, overlayServers]);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Once true, stays true - lets the (lazy-loaded) dialog stay mounted
@@ -110,11 +125,14 @@ export function MapView() {
           url: string,
           _resourceType?: ResourceType,
         ): RequestParameters | undefined => {
-          const authorizationHeader = 'tss'; //TODO: replace
-          if (!authorizationHeader) {
+          const { accessToken, overlayServers } = authRef.current;
+          const isOverlayServerUrl = overlayServers.some((server) =>
+            url.startsWith(server.baseUrl),
+          );
+          if (!accessToken || !isOverlayServerUrl) {
             return undefined;
           }
-          return { url, headers: { Authorization: authorizationHeader } };
+          return { url, headers: { Authorization: `Bearer ${accessToken}` } };
         }}
         onClick={() => void 0}
         onMoveEnd={handleMoveEnd}
@@ -132,23 +150,23 @@ export function MapView() {
             setSettingsOpen(true);
           }}
         />
-        {/*enabledOverlaysTopFirst.map((overlay) => (
+        {enabledOverlays.map((overlay) => (
           <Source
             key={overlay.id}
-            id={`${'OVERLAY_SOURCE_PREFIX'}${overlay.id}`}
+            id={`overlay-source-${overlay.id}`}
             type="raster"
             tiles={overlay.tiles}
             tileSize={256}
           >
             <Layer
-              id={`${'OVERLAY_LAYER_PREFIX'}${overlay.id}`}
+              id={`overlay-layer-${overlay.id}`}
               type="raster"
               paint={{
-                'raster-opacity': overlay.opacity ?? 0.8,
+                'raster-opacity': overlay.opacity,
               }}
             />
           </Source>
-        ))*/}
+        ))}
       </Map>
 
       {mapActionError ? (

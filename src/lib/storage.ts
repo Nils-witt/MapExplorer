@@ -19,6 +19,8 @@ const SHOW_MARKER_LABELS_STORAGE_KEY = 'mapexplorer.showMarkerLabels';
 const SHOW_ALL_MARKERS_STORAGE_KEY = 'mapexplorer.showAllMarkers';
 const MARKERS_ENABLED_STORAGE_KEY = 'mapexplorer.markersEnabled';
 const ACTIVE_OVERLAY_ID_STORAGE_KEY = 'mapexplorer.activeOverlayId';
+const ENABLED_OVERLAYS_STORAGE_KEY = 'mapexplorer.enabledOverlays';
+const OVERLAY_OPACITIES_STORAGE_KEY = 'mapexplorer.overlayOpacities';
 
 function readValue(key: string, fallback = ''): string {
   try {
@@ -523,4 +525,53 @@ export function loadMarkersEnabled(): boolean {
 
 export function saveMarkersEnabled(enabled: boolean): void {
   writeValue(MARKERS_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
+}
+
+export function loadEnabledOverlayKeys(): string[] {
+  const stored = readValue(ENABLED_OVERLAYS_STORAGE_KEY);
+  if (!stored) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.filter((key): key is string => typeof key === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveEnabledOverlayKeys(keys: string[]): void {
+  writeValue(
+    ENABLED_OVERLAYS_STORAGE_KEY,
+    keys.length > 0 ? JSON.stringify(keys) : '',
+  );
+}
+
+export function loadOverlayOpacities(): Record<string, number> {
+  const stored = readValue(OVERLAY_OPACITIES_STORAGE_KEY);
+  if (!stored) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, number] => typeof entry[1] === 'number',
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function saveOverlayOpacities(opacities: Record<string, number>): void {
+  writeValue(
+    OVERLAY_OPACITIES_STORAGE_KEY,
+    Object.keys(opacities).length > 0 ? JSON.stringify(opacities) : '',
+  );
 }

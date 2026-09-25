@@ -9,6 +9,7 @@ import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import UserSettingsComponent from './UserSettingsComponent';
 import ConnectedServersSettings from './settings/ConnectedServersSettings.tsx';
+import OverlaysSettings from './settings/OverlaysSettings.tsx';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -16,7 +17,7 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
-  type OpenTabs = 'user' | 'connectedServers';
+  type OpenTabs = 'user' | 'connectedServers' | 'overlays';
 
   const [openTabs, setOpenTabs] = useState<OpenTabs>('user');
 
@@ -40,11 +41,18 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             >
               Connected Servers
             </Button>
+            <Button
+              variant={openTabs === 'overlays' ? 'contained' : 'outlined'}
+              onClick={() => setOpenTabs('overlays')}
+            >
+              Overlays
+            </Button>
           </Stack>
           <Box>
             <Stack sx={{ pt: 1 }}>
               {openTabs === 'connectedServers' && <ConnectedServersSettings />}
               {openTabs === 'user' && <UserSettingsComponent />}
+              {openTabs === 'overlays' && <OverlaysSettings />}
             </Stack>
           </Box>
         </Stack>
