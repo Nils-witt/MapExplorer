@@ -130,6 +130,7 @@ function withRenewLock<T>(task: () => Promise<T>): Promise<T> {
 }
 
 async function renewStoredUser(): Promise<User | null> {
+  console.log('Renewing OIDC user');
   const userManager = await getUserManager();
   const stored = await userManager.getUser();
   if (!stored?.refresh_token) {
@@ -140,12 +141,17 @@ async function renewStoredUser(): Promise<User | null> {
     return stored;
   }
   try {
+    console.log('Renewing OIDC user with refresh token');
     return await userManager.signinSilent();
   } catch (err) {
     if (err instanceof ErrorResponse) {
       // The IdP rejected the refresh token (revoked, expired session, ...),
       // so retrying later is pointless.
       await userManager.removeUser();
+      console.log(
+        'OIDC token renewal failed and refresh token is no longer valid',
+        err,
+      );
       return null;
     }
     // Most likely offline; keep the stored session so a later attempt, e.g.

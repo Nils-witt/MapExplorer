@@ -7,33 +7,16 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
-import { MapSettingsComponent } from './MapSettingsComponent';
-import ServerMapsSettingsComponent from './ServerMapsSettingsComponent';
-import OverlaySettingsComponent from './OverlaySettingsComponent';
-import MarkerSettingsComponent from './MarkerSettingsComponent';
 import UserSettingsComponent from './UserSettingsComponent';
 import ConnectedServersSettings from './settings/ConnectedServersSettings.tsx';
 
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
-  styleUrl: string;
-  onApplyStyle: (url: string) => void;
 }
 
-export function SettingsDialog({
-  open,
-  onClose,
-  styleUrl,
-  onApplyStyle,
-}: SettingsDialogProps) {
-  type OpenTabs =
-    | 'mapSettings'
-    | 'markers'
-    | 'overlays'
-    | 'serverMaps'
-    | 'user'
-    | 'connectedServers';
+export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+  type OpenTabs = 'user' | 'connectedServers';
 
   const [openTabs, setOpenTabs] = useState<OpenTabs>('user');
 
@@ -43,30 +26,6 @@ export function SettingsDialog({
       <DialogContent>
         <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
           <Stack spacing={1} sx={{ minWidth: 200, flexShrink: 0 }}>
-            <Button
-              variant={openTabs === 'mapSettings' ? 'contained' : 'outlined'}
-              onClick={() => setOpenTabs('mapSettings')}
-            >
-              Map Settings
-            </Button>
-            <Button
-              variant={openTabs === 'markers' ? 'contained' : 'outlined'}
-              onClick={() => setOpenTabs('markers')}
-            >
-              Markers
-            </Button>
-            <Button
-              variant={openTabs === 'overlays' ? 'contained' : 'outlined'}
-              onClick={() => setOpenTabs('overlays')}
-            >
-              Overlays
-            </Button>
-            <Button
-              variant={openTabs === 'serverMaps' ? 'contained' : 'outlined'}
-              onClick={() => setOpenTabs('serverMaps')}
-            >
-              Server Maps
-            </Button>
             <Button
               variant={openTabs === 'user' ? 'contained' : 'outlined'}
               onClick={() => setOpenTabs('user')}
@@ -84,20 +43,7 @@ export function SettingsDialog({
           </Stack>
           <Box>
             <Stack sx={{ pt: 1 }}>
-              {/* Map style settings */}
-              {openTabs === 'mapSettings' && (
-                <MapSettingsComponent
-                  styleUrl={styleUrl}
-                  onApplyStyle={onApplyStyle}
-                />
-              )}
               {openTabs === 'connectedServers' && <ConnectedServersSettings />}
-              {openTabs === 'markers' && <MarkerSettingsComponent />}
-
-              {openTabs === 'overlays' && (
-                <OverlaySettingsComponent styleUrl={styleUrl} />
-              )}
-              {openTabs === 'serverMaps' && <ServerMapsSettingsComponent />}
               {openTabs === 'user' && <UserSettingsComponent />}
             </Stack>
           </Box>

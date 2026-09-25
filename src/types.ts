@@ -1,5 +1,10 @@
-import type { GeoObject } from './api/serverApi';
-
+export interface GeoObject {
+  id: string;
+  name: string;
+  description?: string;
+  latitude: number;
+  longitude: number;
+}
 export interface Overlay {
   id: string;
   name: string;

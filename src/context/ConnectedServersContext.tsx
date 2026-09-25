@@ -8,7 +8,7 @@ type ConnectedServer = {
 };
 
 interface ConnectedServersContextValue {
-  servers: ConnectedServer[];
+  unitServers: ConnectedServer[];
   overlayServers: ConnectedServer[];
 }
 
@@ -20,15 +20,21 @@ export function ConnectedServersProvider({
 }: {
   children: ReactNode;
 }) {
-  const [overlayServers] = useState<ConnectedServer[]>([]);
-  const [servers] = useState<ConnectedServer[]>([]);
+  const [overlayServers] = useState<ConnectedServer[]>([
+    {
+      id: 'default-overlay-server',
+      baseUrl: 'https://overlays.nilswitt.dev',
+      name: 'Default Overlay Server',
+    },
+  ]);
+  const [unitServers] = useState<ConnectedServer[]>([]);
 
   const value = useMemo(
     () => ({
-      servers,
       overlayServers,
+      unitServers,
     }),
-    [servers, overlayServers],
+    [overlayServers, unitServers],
   );
 
   return (
