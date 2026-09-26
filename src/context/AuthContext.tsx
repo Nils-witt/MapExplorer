@@ -59,24 +59,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           });
         };
+        // A renewal that failed while offline leaves the session in place
+        // with its expired token, and the expiry timers won't fire again, so
+        // retry as soon as the device is back online.
+        const onOnline = () => {
+          void userManager.getUser().then((stored) => {
+            if (stored?.expired) {
+              renew();
+            }
+          });
+        };
         const { events } = userManager;
         events.addUserLoaded(onLoaded);
         events.addUserUnloaded(onUnloaded);
         events.addUserSignedOut(onUnloaded);
         events.addAccessTokenExpiring(renew);
         events.addAccessTokenExpired(renew);
+        window.addEventListener('online', onOnline);
         unsubscribe = () => {
           events.removeUserLoaded(onLoaded);
           events.removeUserUnloaded(onUnloaded);
           events.removeUserSignedOut(onUnloaded);
           events.removeAccessTokenExpiring(renew);
           events.removeAccessTokenExpired(renew);
+          window.removeEventListener('online', onOnline);
         };
 
         // Also arms the expiring/expired timers for the stored session.
         const stored = await userManager.getUser();
         // A session whose access token lapsed while the app was closed can
-        // still be renewed with its refresh token.
+        // still be renewed with its refresh token. Offline, the renewal
+        // keeps the stored session so the cached data stays usable.
         const current =
           stored && !stored.expired ? stored : await renewOidcUser();
         if (!cancelled) {

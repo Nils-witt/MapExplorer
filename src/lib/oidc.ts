@@ -154,9 +154,10 @@ async function renewStoredUser(): Promise<User | null> {
       );
       return null;
     }
-    // Most likely offline; keep the stored session so a later attempt, e.g.
-    // after a reload, can still renew it.
+    // Most likely offline; keep the stored session, even with an expired
+    // access token, so the app keeps working from its cached data and a
+    // later attempt, e.g. once back online, can still renew it.
     console.warn('OIDC token renewal failed', err);
-    return stored.expired ? null : stored;
+    return stored;
   }
 }

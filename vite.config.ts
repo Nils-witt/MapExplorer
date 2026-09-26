@@ -128,6 +128,20 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/config\.json/],
         runtimeCaching: [
           {
+            // The OIDC settings are read from config.json on every start, so
+            // keep the last copy for starting up offline.
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin && url.pathname === '/config.json',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'config-cache',
+              networkTimeoutSeconds: 5,
+              cacheableResponse: {
+                statuses: [200],
+              },
+            },
+          },
+          {
             // vector map tiles, e.g. .../{z}/{x}/{y}.pbf
             // A plain RegExp route only matches cross-origin URLs when the
             // match starts at index 0, which tile URLs never do - so this
