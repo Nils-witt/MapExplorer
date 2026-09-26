@@ -28,16 +28,12 @@ self.addEventListener('fetch', function (event) {
       const version = matches[2];
 
       const cacheName = `${mapUuid}-${version}`;
-      console.log('Cust: Using cache name:', cacheName);
-
       event.respondWith(
         caches.open(cacheName).then((cache) => {
           return cache.match(event.request).then((response) => {
             if (response) {
-              console.log('Cust: Cache hit for:', url);
               return response;
             } else {
-              console.log('Cust: Cache miss for:', url);
               return fetch(event.request).then((networkResponse) => {
                 if (networkResponse.ok) {
                   cache.put(event.request, networkResponse.clone());
