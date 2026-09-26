@@ -82,3 +82,29 @@ export async function deleteAllCaches(): Promise<number> {
   await Promise.all(names.map((name) => caches.delete(name)));
   return names.length;
 }
+
+export interface CacheInfo {
+  name: string;
+  entries: number;
+}
+
+export async function listCaches(): Promise<CacheInfo[]> {
+  const names = await caches.keys();
+  return Promise.all(
+    names.map(async (name) => {
+      const cache = await caches.open(name);
+      return { name, entries: (await cache.keys()).length };
+    }),
+  );
+}
+
+// Splits an overlay cache name back into its map uuid and version, or
+// returns null for caches that don't hold an overlay version.
+export function parseOverlayCacheName(
+  name: string,
+): { mapUuid: string; version: string } | null {
+  const match = name.match(
+    /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(\d{1,2})$/,
+  );
+  return match ? { mapUuid: match[1], version: match[2] } : null;
+}

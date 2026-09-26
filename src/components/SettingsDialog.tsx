@@ -10,6 +10,7 @@ import Box from '@mui/material/Box';
 import UserSettingsComponent from './UserSettingsComponent';
 import ConnectedServersSettings from './settings/ConnectedServersSettings.tsx';
 import OverlaysSettings from './settings/OverlaysSettings.tsx';
+import ServiceWorkerSettings from './settings/ServiceWorkerSettings.tsx';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -17,7 +18,7 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
-  type OpenTabs = 'user' | 'connectedServers' | 'overlays';
+  type OpenTabs = 'user' | 'connectedServers' | 'overlays' | 'offline';
 
   const [openTabs, setOpenTabs] = useState<OpenTabs>('user');
 
@@ -47,12 +48,19 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             >
               Overlays
             </Button>
+            <Button
+              variant={openTabs === 'offline' ? 'contained' : 'outlined'}
+              onClick={() => setOpenTabs('offline')}
+            >
+              Offline &amp; Cache
+            </Button>
           </Stack>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Stack sx={{ pt: 1 }}>
               {openTabs === 'connectedServers' && <ConnectedServersSettings />}
               {openTabs === 'user' && <UserSettingsComponent />}
               {openTabs === 'overlays' && <OverlaysSettings />}
+              {openTabs === 'offline' && <ServiceWorkerSettings />}
             </Stack>
           </Box>
         </Stack>
