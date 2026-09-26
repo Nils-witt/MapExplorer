@@ -14,20 +14,15 @@ export function isTileCacheSupported(): boolean {
 
 // Each overlay version gets a cache of its own, so it survives the shared
 // runtime tile cache's eviction and old versions never mix with new ones.
-export function overlayCacheName(
-  serverId: string,
-  mapUuid: string,
-  version: string,
-): string {
-  return `${serverId}-${mapUuid}-${version}`;
+export function overlayCacheName(mapUuid: string, version: string): string {
+  return `${mapUuid}-${version}`;
 }
 
 export async function isOverlayCached(
-  serverId: string,
   mapUuid: string,
   version: string,
 ): Promise<boolean> {
-  return caches.has(overlayCacheName(serverId, mapUuid, version));
+  return caches.has(overlayCacheName(mapUuid, version));
 }
 
 // Downloads every tile listed in the version's manifest into its cache.
@@ -41,7 +36,7 @@ export async function cacheOverlayTiles(
 ): Promise<CacheOverlayResult> {
   const server = new OverlayServer(baseUrl, () => accessToken);
   const tiles = await server.listTiles(mapUuid, version);
-  const cache = await caches.open(overlayCacheName(serverId, mapUuid, version));
+  const cache = await caches.open(overlayCacheName(mapUuid, version));
   const init = accessToken
     ? { headers: { Authorization: `Bearer ${accessToken}` } }
     : undefined;

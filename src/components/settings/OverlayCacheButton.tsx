@@ -44,7 +44,7 @@ export default function OverlayCacheButton({
       return;
     }
     let cancelled = false;
-    void isOverlayCached(server.id, overlay.uuid, version).then((cached) => {
+    void isOverlayCached(overlay.uuid, version).then((cached) => {
       if (!cancelled && cached) {
         // Don't clobber a caching run started in the meantime.
         setState((prev) =>

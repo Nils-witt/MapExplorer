@@ -1,7 +1,8 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { execSync } from 'node:child_process';
+import { rolldown } from 'rolldown';
 
 function getGitCommit(): string {
   if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT;
@@ -29,6 +30,52 @@ function getAppVersion(): string {
   }
 }
 
+const CUSTOM_SW_ENTRY = 'src/sw/custom.ts';
+const CUSTOM_SW_FILE = 'sw-custom.js';
+
+async function bundleCustomServiceWorker(minify: boolean): Promise<string> {
+  const bundle = await rolldown({ input: CUSTOM_SW_ENTRY });
+  try {
+    const { output } = await bundle.generate({ format: 'iife', minify });
+    return output[0].code;
+  } finally {
+    await bundle.close();
+  }
+}
+
+// Compiles the custom service worker code (TypeScript) into a classic script
+// at /sw-custom.js, which the Workbox-generated sw.js pulls in via
+// importScripts. Served on the fly in dev, emitted as an asset in builds.
+function customServiceWorker(): Plugin {
+  let minify = false;
+  return {
+    name: 'custom-service-worker',
+    configResolved(config) {
+      minify = !!config.build.minify;
+    },
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url?.split('?')[0] !== `/${CUSTOM_SW_FILE}`) return next();
+        try {
+          const code = await bundleCustomServiceWorker(false);
+          res.setHeader('Content-Type', 'text/javascript');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.end(code);
+        } catch (err) {
+          next(err);
+        }
+      });
+    },
+    async generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: CUSTOM_SW_FILE,
+        source: await bundleCustomServiceWorker(minify),
+      });
+    },
+  };
+}
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(getAppVersion()),
@@ -36,11 +83,12 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    customServiceWorker(),
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       devOptions: {
-        enabled: true,
+        enabled: false,
         navigateFallback: 'index.html',
         // Nothing is built in dev, so the precache glob never matches.
         suppressWarnings: true,
@@ -73,6 +121,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Custom SW code compiled from src/sw/custom.ts, see customServiceWorker.
+        importScripts: [CUSTOM_SW_FILE],
         navigateFallback: 'index.html',
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
         navigateFallbackDenylist: [/^\/config\.json/],
