@@ -1,5 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import type { MapRef, ViewStateChangeEvent } from '@vis.gl/react-maplibre';
+import {
+  type MapRef,
+  Marker,
+  type ViewStateChangeEvent,
+} from '@vis.gl/react-maplibre';
 import {
   GeolocateControl,
   Layer,
@@ -72,6 +76,10 @@ export function MapView() {
     () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
   );
   const [mapActionError, setMapActionError] = useState<string | null>(null);
+  const [focusPosition, setFocusPosition] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   useEffect(() => {
     try {
@@ -93,19 +101,21 @@ export function MapView() {
     saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });
   };
 
-  const handleLocateMarker = (_uuid: string) => {
-    /*
-    const entry = allGeoObjects.find(
-      (candidate: GeoObject) => candidate.geoObject.uuid === uuid,
-    );
+  const handleLocateMarker = (
+    _uuid: string,
+    latitude: number,
+    longitude: number,
+  ) => {
     const map = mapRef.current;
-    if (!entry || !map) {
+    if (isNaN(latitude) || isNaN(longitude) || !map) {
+      setFocusPosition(null);
       return;
     }
+    setFocusPosition({ latitude, longitude });
     map.flyTo({
-      center: [entry.geoObject.longitude, entry.geoObject.latitude],
+      center: [longitude, latitude],
       zoom: Math.max(map.getZoom(), 14),
-    });*/
+    });
   };
 
   return (
@@ -137,8 +147,14 @@ export function MapView() {
         onClick={() => void 0}
         onMoveEnd={handleMoveEnd}
       >
+        {focusPosition && (
+          <Marker
+            latitude={focusPosition.latitude}
+            longitude={focusPosition.longitude}
+          />
+        )}
         <NavigationControl position="top-left" />
-        <SearchButtonControl items={[]} onSelect={handleLocateMarker} />
+        <SearchButtonControl onSelect={handleLocateMarker} />
         <GeolocateControl
           position="top-left"
           positionOptions={{ enableHighAccuracy: true }}

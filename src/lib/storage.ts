@@ -1,24 +1,9 @@
-import type {
-  GeoObjectEntry,
-  LegacyLocalMarker,
-  MapPosition,
-  Overlay,
-} from '../types';
+import type { OverlayGeoObject, OverlayMap } from '../api/OverlayServer';
+import type { ConnectedServer, MapPosition } from '../types';
 
 const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
-const OVERLAYS_STORAGE_KEY = 'mapexplorer.overlays';
 const DEFAULT_SERVER_URL_STORAGE_KEY = 'mapexplorer.serverBaseUrl';
-const SERVERS_STORAGE_KEY = 'mapexplorer.servers';
-const LEGACY_SERVER_USERNAME_STORAGE_KEY = 'mapexplorer.serverUsername';
-const LEGACY_SERVER_TOKEN_STORAGE_KEY = 'mapexplorer.serverToken';
-const LEGACY_SERVER_REFRESH_TOKEN_STORAGE_KEY =
-  'mapexplorer.serverRefreshToken';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
-const MARKERS_STORAGE_KEY = 'mapexplorer.markers';
-const SHOW_MARKER_LABELS_STORAGE_KEY = 'mapexplorer.showMarkerLabels';
-const SHOW_ALL_MARKERS_STORAGE_KEY = 'mapexplorer.showAllMarkers';
-const MARKERS_ENABLED_STORAGE_KEY = 'mapexplorer.markersEnabled';
-const ACTIVE_OVERLAY_ID_STORAGE_KEY = 'mapexplorer.activeOverlayId';
 const ENABLED_OVERLAYS_STORAGE_KEY = 'mapexplorer.enabledOverlays';
 const OVERLAY_OPACITIES_STORAGE_KEY = 'mapexplorer.overlayOpacities';
 
@@ -42,25 +27,19 @@ function writeValue(key: string, value: string): void {
   }
 }
 
-// Markers, overlays and servers can grow large (imported CSVs, many tile
-// layers) so they live in IndexedDB rather than localStorage. Everything
-// else here is small config and stays in localStorage for simplicity.
+// Connected servers and the overlays and geo objects fetched from them live
+// in IndexedDB.
+// Everything else here is small config and stays in localStorage for
+// simplicity. Bump the version whenever a store is added - older installs
+// already have this database at version 3 (from earlier, retired stores).
 const IDB_DATABASE_NAME = 'mapexplorer';
-const IDB_DATABASE_VERSION = 3;
-
-// Legacy object store from schema v1: each of markers/overlays/servers was
-// kept as a single serialized array under one key. Still opened (read-only,
-// for one-time migration) so upgrades from v1 don't lose data.
-const IDB_KV_STORE_NAME = 'kv';
-
-// Legacy table from before local markers were replaced by server-backed
-// GeoObjects. Kept read-only, purely so any markers a user placed before the
-// upgrade can be offered for one-time migration onto a server map.
-const MARKERS_TABLE_NAME = 'markers';
-const OVERLAYS_TABLE_NAME = 'overlays';
-const SERVERS_TABLE_NAME = 'servers';
+const IDB_DATABASE_VERSION = 8;
+const OVERLAY_SERVERS_TABLE_NAME = 'overlayServers';
+const UNIT_SERVERS_TABLE_NAME = 'unitServers';
+const AVAILABLE_OVERLAYS_TABLE_NAME = 'availableOverlays';
+const AVAILABLE_OVERLAYS_SERVER_INDEX_NAME = 'serverId';
 const GEO_OBJECTS_TABLE_NAME = 'geoObjects';
-const GEO_OBJECTS_OVERLAY_INDEX_NAME = 'overlayId';
+const GEO_OBJECTS_SERVER_INDEX_NAME = 'serverId';
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -69,28 +48,47 @@ function openDb(): Promise<IDBDatabase> {
       return;
     }
     const request = indexedDB.open(IDB_DATABASE_NAME, IDB_DATABASE_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(IDB_KV_STORE_NAME)) {
-        db.createObjectStore(IDB_KV_STORE_NAME);
+      [OVERLAY_SERVERS_TABLE_NAME, UNIT_SERVERS_TABLE_NAME].forEach((name) => {
+        if (!db.objectStoreNames.contains(name)) {
+          db.createObjectStore(name, { keyPath: 'id' });
+        }
+      });
+      // Before v6 this held one row per server with all its overlays. It's
+      // only a cache, so the old rows are dropped rather than migrated.
+      if (
+        event.oldVersion < 6 &&
+        db.objectStoreNames.contains(AVAILABLE_OVERLAYS_TABLE_NAME)
+      ) {
+        db.deleteObjectStore(AVAILABLE_OVERLAYS_TABLE_NAME);
       }
-      if (!db.objectStoreNames.contains(MARKERS_TABLE_NAME)) {
-        db.createObjectStore(MARKERS_TABLE_NAME, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(AVAILABLE_OVERLAYS_TABLE_NAME)) {
+        // The same map uuid can show up on more than one server (mirrored
+        // maps), so rows are keyed by server and uuid together.
+        const availableOverlaysStore = db.createObjectStore(
+          AVAILABLE_OVERLAYS_TABLE_NAME,
+          { keyPath: ['serverId', 'uuid'] },
+        );
+        availableOverlaysStore.createIndex(
+          AVAILABLE_OVERLAYS_SERVER_INDEX_NAME,
+          'serverId',
+        );
       }
-      if (!db.objectStoreNames.contains(OVERLAYS_TABLE_NAME)) {
-        db.createObjectStore(OVERLAYS_TABLE_NAME, { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains(SERVERS_TABLE_NAME)) {
-        db.createObjectStore(SERVERS_TABLE_NAME, { keyPath: 'id' });
+      // In v7 this only held the drawn version of enabled overlays, keyed
+      // by overlay and uuid. Also just a cache, so dropped rather than
+      // migrated.
+      if (
+        event.oldVersion < 8 &&
+        db.objectStoreNames.contains(GEO_OBJECTS_TABLE_NAME)
+      ) {
+        db.deleteObjectStore(GEO_OBJECTS_TABLE_NAME);
       }
       if (!db.objectStoreNames.contains(GEO_OBJECTS_TABLE_NAME)) {
         const geoObjectsStore = db.createObjectStore(GEO_OBJECTS_TABLE_NAME, {
-          keyPath: 'geoObject.uuid',
+          keyPath: ['serverId', 'overlayId', 'overlayVersion', 'uuid'],
         });
-        geoObjectsStore.createIndex(
-          GEO_OBJECTS_OVERLAY_INDEX_NAME,
-          'overlayId',
-        );
+        geoObjectsStore.createIndex(GEO_OBJECTS_SERVER_INDEX_NAME, 'serverId');
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -98,51 +96,36 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function kvGet<T>(key: string): Promise<T | undefined> {
+// Object stores return rows in primary-key order, so list order is kept in
+// an explicit `order` column that's added on the way in and stripped on the
+// way out. Resolves to null when nothing has been stored yet (or IndexedDB
+// is unavailable), so callers can fall back to their defaults.
+async function tableGetAllOrdered<T extends object>(
+  storeName: string,
+): Promise<T[] | null> {
   try {
     const db = await openDb();
-    return await new Promise<T | undefined>((resolve, reject) => {
-      const transaction = db.transaction(IDB_KV_STORE_NAME, 'readonly');
-      const request = transaction.objectStore(IDB_KV_STORE_NAME).get(key);
-      request.onsuccess = () => resolve(request.result as T | undefined);
-      request.onerror = () => reject(request.error);
-    });
+    const stored = await new Promise<(T & { order: number })[]>(
+      (resolve, reject) => {
+        const transaction = db.transaction(storeName, 'readonly');
+        const request = transaction.objectStore(storeName).getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      },
+    );
+    if (stored.length === 0) {
+      return null;
+    }
+    return stored
+      .sort((a, b) => a.order - b.order)
+      .map(({ order: _order, ...record }) => record as unknown as T);
   } catch {
-    return undefined;
+    return null;
   }
 }
 
-async function kvDelete(key: string): Promise<void> {
-  try {
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(IDB_KV_STORE_NAME, 'readwrite');
-      transaction.objectStore(IDB_KV_STORE_NAME).delete(key);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  } catch {
-    // IndexedDB unavailable (e.g. private browsing) - skip persistence
-  }
-}
-
-async function tableGetAll<T>(storeName: string): Promise<T[]> {
-  try {
-    const db = await openDb();
-    return await new Promise<T[]>((resolve, reject) => {
-      const transaction = db.transaction(storeName, 'readonly');
-      const request = transaction.objectStore(storeName).getAll();
-      request.onsuccess = () => resolve(request.result as T[]);
-      request.onerror = () => reject(request.error);
-    });
-  } catch {
-    return [];
-  }
-}
-
-// Replaces the full contents of a table in one transaction: clears every
-// row, then re-inserts the given records keyed by their `id`.
-async function tableReplaceAll<T extends { id: string }>(
+// Replaces the full contents of a table in one transaction.
+async function tableReplaceAllOrdered<T extends object>(
   storeName: string,
   records: T[],
 ): Promise<void> {
@@ -152,7 +135,9 @@ async function tableReplaceAll<T extends { id: string }>(
       const transaction = db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
       store.clear();
-      records.forEach((record) => store.put(record));
+      records.forEach((record, index) =>
+        store.put({ ...record, order: index }),
+      );
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
     });
@@ -161,30 +146,158 @@ async function tableReplaceAll<T extends { id: string }>(
   }
 }
 
-// Object stores return rows in primary-key order, not insertion or list
-// order, so list order (e.g. overlay layering) is kept in an explicit
-// `order` column that's added on the way in and stripped on the way out.
-async function tableGetAllOrdered<T extends { id: string }>(
-  storeName: string,
-): Promise<T[]> {
-  const stored = await tableGetAll<T & { order: number }>(storeName);
-  return stored
-    .sort((a, b) => a.order - b.order)
-    .map((record) => {
-      const rest: Record<string, unknown> = { ...record };
-      delete rest.order;
-      return rest as T;
-    });
+export function loadOverlayServers(): Promise<ConnectedServer[] | null> {
+  return tableGetAllOrdered<ConnectedServer>(OVERLAY_SERVERS_TABLE_NAME);
 }
 
-async function tableReplaceAllOrdered<T extends { id: string }>(
-  storeName: string,
-  records: T[],
-): Promise<void> {
-  await tableReplaceAll(
-    storeName,
-    records.map((record, index) => ({ ...record, order: index })),
+export function saveOverlayServers(servers: ConnectedServer[]): Promise<void> {
+  return tableReplaceAllOrdered(OVERLAY_SERVERS_TABLE_NAME, servers);
+}
+
+export function loadUnitServers(): Promise<ConnectedServer[] | null> {
+  return tableGetAllOrdered<ConnectedServer>(UNIT_SERVERS_TABLE_NAME);
+}
+
+export function saveUnitServers(servers: ConnectedServer[]): Promise<void> {
+  return tableReplaceAllOrdered(UNIT_SERVERS_TABLE_NAME, servers);
+}
+
+// The overlays last fetched from each overlay server, one row per overlay,
+// so they're available straight away on startup and while offline. Each row
+// also carries the user's settings for that overlay.
+type AvailableOverlayRecord = OverlayMap & {
+  serverId: string;
+  enabled: boolean;
+  // Position among the enabled overlays (later ones are drawn on top). Only
+  // set while enabled.
+  enabledOrder?: number;
+  // Unset until the user changes it from the default.
+  opacity?: number;
+  // The version to draw. Unset to follow the overlay's currentVersion.
+  selectedVersion?: string;
+};
+
+export interface AvailableOverlaysState {
+  overlays: Record<string, OverlayMap[]>;
+  // In the order they were switched on.
+  enabledOverlayIds: string[];
+  overlayOpacities: Record<string, number>;
+  // Only overlays pinned to a version other than their current one.
+  overlayVersions: Record<string, string>;
+}
+
+export async function loadAvailableOverlays(): Promise<AvailableOverlaysState> {
+  const stored =
+    (await tableGetAllOrdered<AvailableOverlayRecord>(
+      AVAILABLE_OVERLAYS_TABLE_NAME,
+    )) ?? [];
+  const overlays: Record<string, OverlayMap[]> = {};
+  const enabled: { id: string; order: number }[] = [];
+  const overlayOpacities: Record<string, number> = {};
+  const overlayVersions: Record<string, string> = {};
+  for (const {
+    serverId,
+    enabled: isEnabled,
+    enabledOrder,
+    opacity,
+    selectedVersion,
+    ...overlay
+  } of stored) {
+    // Rows stored before versions were fetched have none.
+    (overlays[serverId] ??= []).push({
+      ...overlay,
+      versions: overlay.versions ?? [],
+    });
+    if (isEnabled) {
+      enabled.push({ id: overlay.uuid, order: enabledOrder ?? 0 });
+    }
+    if (opacity !== undefined) {
+      overlayOpacities[overlay.uuid] = opacity;
+    }
+    if (selectedVersion !== undefined) {
+      overlayVersions[overlay.uuid] = selectedVersion;
+    }
+  }
+  return {
+    overlays,
+    enabledOverlayIds: [
+      ...new Set(enabled.sort((a, b) => a.order - b.order).map(({ id }) => id)),
+    ],
+    overlayOpacities,
+    overlayVersions,
+  };
+}
+
+export async function saveAvailableOverlays({
+  overlays,
+  enabledOverlayIds,
+  overlayOpacities,
+  overlayVersions,
+}: AvailableOverlaysState): Promise<void> {
+  const records: AvailableOverlayRecord[] = Object.entries(overlays).flatMap(
+    ([serverId, list]) =>
+      list.map((overlay) => {
+        const enabledOrder = enabledOverlayIds.indexOf(overlay.uuid);
+        return {
+          ...overlay,
+          serverId,
+          enabled: enabledOrder !== -1,
+          enabledOrder: enabledOrder !== -1 ? enabledOrder : undefined,
+          opacity: overlayOpacities[overlay.uuid],
+          selectedVersion: overlayVersions[overlay.uuid],
+        };
+      }),
   );
+  await tableReplaceAllOrdered(AVAILABLE_OVERLAYS_TABLE_NAME, records);
+  // Once the settings live in rows, drop the old localStorage copies. Not
+  // before, or they'd be lost if the first fetch after upgrading fails.
+  if (records.length > 0) {
+    writeValue(ENABLED_OVERLAYS_STORAGE_KEY, '');
+    writeValue(OVERLAY_OPACITIES_STORAGE_KEY, '');
+  }
+}
+
+// The geo objects last fetched for every version of every overlay, one row
+// per geo object, so they're available straight away on startup and while
+// offline. `overlayVersion` is the version they were fetched for.
+type GeoObjectRecord = OverlayGeoObject & {
+  serverId: string;
+  overlayId: string;
+  overlayVersion: string;
+};
+
+// Geo objects by server id, overlay id and version.
+export type StoredGeoObjects = Record<
+  string,
+  Record<string, Record<string, OverlayGeoObject[]>>
+>;
+
+export async function loadGeoObjects(): Promise<StoredGeoObjects> {
+  const stored =
+    (await tableGetAllOrdered<GeoObjectRecord>(GEO_OBJECTS_TABLE_NAME)) ?? [];
+  const geoObjects: StoredGeoObjects = {};
+  for (const { serverId, overlayId, overlayVersion, ...geoObject } of stored) {
+    ((geoObjects[serverId] ??= {})[overlayId] ??= {})[overlayVersion] ??= [];
+    geoObjects[serverId][overlayId][overlayVersion].push(geoObject);
+  }
+  return geoObjects;
+}
+
+export function saveGeoObjects(geoObjects: StoredGeoObjects): Promise<void> {
+  const records: GeoObjectRecord[] = Object.entries(geoObjects).flatMap(
+    ([serverId, byOverlay]) =>
+      Object.entries(byOverlay).flatMap(([overlayId, byVersion]) =>
+        Object.entries(byVersion).flatMap(([overlayVersion, list]) =>
+          list.map((geoObject) => ({
+            ...geoObject,
+            serverId,
+            overlayId,
+            overlayVersion,
+          })),
+        ),
+      ),
+  );
+  return tableReplaceAllOrdered(GEO_OBJECTS_TABLE_NAME, records);
 }
 
 export function applyConfig(config: {
@@ -212,145 +325,18 @@ export function loadStyleUrl(defaultStyleUrl: string): string {
   return readValue(STYLE_URL_STORAGE_KEY, defaultStyleUrl);
 }
 
-export function saveStyleUrl(url: string): void {
+function saveStyleUrl(url: string): void {
   writeValue(STYLE_URL_STORAGE_KEY, url);
-}
-
-// Installs from before overlays moved to IndexedDB kept them as a JSON blob
-// in localStorage under the same key. Fold that in once, then drop it.
-function migrateLegacyOverlays(): Overlay[] {
-  const stored = readValue(OVERLAYS_STORAGE_KEY);
-  writeValue(OVERLAYS_STORAGE_KEY, '');
-  if (!stored) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-// Installs from before overlays moved to the `overlays` table kept the list
-// as a single JSON blob under one key in the old `kv` store. Fold that in
-// once (falling back to the even older localStorage blob), then drop it.
-async function migrateOverlaysToTable(): Promise<Overlay[]> {
-  const stored = await kvGet<Overlay[]>(OVERLAYS_STORAGE_KEY);
-  if (stored !== undefined) {
-    await kvDelete(OVERLAYS_STORAGE_KEY);
-    return Array.isArray(stored) ? stored : [];
-  }
-  return migrateLegacyOverlays();
-}
-
-export async function loadOverlays(): Promise<Overlay[]> {
-  const stored = await tableGetAllOrdered<Overlay>(OVERLAYS_TABLE_NAME);
-  if (stored.length > 0) {
-    return stored;
-  }
-  const migrated = await migrateOverlaysToTable();
-  if (migrated.length > 0) {
-    await saveOverlays(migrated);
-  }
-  return migrated;
-}
-
-export async function saveOverlays(overlays: Overlay[]): Promise<void> {
-  await tableReplaceAllOrdered(OVERLAYS_TABLE_NAME, overlays);
 }
 
 // Base URL suggested by config.json for a fresh install, used to prefill
 // the first server a user adds. Not tied to any particular connection.
-export function loadDefaultServerUrl(defaultBaseUrl = ''): string {
+function loadDefaultServerUrl(defaultBaseUrl = ''): string {
   return readValue(DEFAULT_SERVER_URL_STORAGE_KEY, defaultBaseUrl);
 }
 
-export function saveDefaultServerUrl(url: string): void {
+function saveDefaultServerUrl(url: string): void {
   writeValue(DEFAULT_SERVER_URL_STORAGE_KEY, url);
-}
-
-export interface ServerConnection {
-  id: string;
-  baseUrl: string;
-  username: string;
-  token: string;
-  refreshToken: string;
-}
-
-function isServerConnection(value: unknown): value is ServerConnection {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.baseUrl === 'string' &&
-    typeof candidate.username === 'string' &&
-    typeof candidate.token === 'string' &&
-    typeof candidate.refreshToken === 'string'
-  );
-}
-
-// Installs from before multi-server support kept a single connection under
-// separate keys. Fold it into the new list once, then drop the legacy keys.
-function migrateLegacyServer(): ServerConnection[] {
-  const baseUrl = loadDefaultServerUrl();
-  const token = readValue(LEGACY_SERVER_TOKEN_STORAGE_KEY);
-  const username = readValue(LEGACY_SERVER_USERNAME_STORAGE_KEY);
-  const refreshToken = readValue(LEGACY_SERVER_REFRESH_TOKEN_STORAGE_KEY);
-  writeValue(LEGACY_SERVER_USERNAME_STORAGE_KEY, '');
-  writeValue(LEGACY_SERVER_TOKEN_STORAGE_KEY, '');
-  writeValue(LEGACY_SERVER_REFRESH_TOKEN_STORAGE_KEY, '');
-  if (!baseUrl && !token) {
-    return [];
-  }
-  return [{ id: 'legacy', baseUrl, username, token, refreshToken }];
-}
-
-// Installs from before servers moved to IndexedDB kept the multi-server
-// list as a JSON blob in localStorage under the same key. Fold that in
-// once (falling back to the even older single-connection keys), then drop it.
-function migrateLegacyServers(): ServerConnection[] {
-  const stored = readValue(SERVERS_STORAGE_KEY);
-  writeValue(SERVERS_STORAGE_KEY, '');
-  if (!stored) {
-    return migrateLegacyServer();
-  }
-  try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.filter(isServerConnection) : [];
-  } catch {
-    return [];
-  }
-}
-
-// Installs from before servers moved to the `servers` table kept the list as
-// a single JSON blob under one key in the old `kv` store. Fold that in once
-// (falling back to the even older localStorage-only formats), then drop it.
-async function migrateServersToTable(): Promise<ServerConnection[]> {
-  const stored = await kvGet<ServerConnection[]>(SERVERS_STORAGE_KEY);
-  if (stored !== undefined) {
-    await kvDelete(SERVERS_STORAGE_KEY);
-    return Array.isArray(stored) ? stored.filter(isServerConnection) : [];
-  }
-  return migrateLegacyServers();
-}
-
-export async function loadServers(): Promise<ServerConnection[]> {
-  const stored = await tableGetAllOrdered<ServerConnection>(SERVERS_TABLE_NAME);
-  if (stored.length > 0) {
-    return stored.filter(isServerConnection);
-  }
-  const migrated = await migrateServersToTable();
-  if (migrated.length > 0) {
-    await saveServers(migrated);
-  }
-  return migrated;
-}
-
-export async function saveServers(servers: ServerConnection[]): Promise<void> {
-  await tableReplaceAllOrdered(SERVERS_TABLE_NAME, servers);
 }
 
 function isMapPosition(value: unknown): value is MapPosition {
@@ -384,194 +370,4 @@ export function loadMapPosition(): MapPosition | null {
 
 export function saveMapPosition(position: MapPosition): void {
   writeValue(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
-}
-
-function isLegacyLocalMarker(value: unknown): value is LegacyLocalMarker {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.lng === 'number' &&
-    typeof candidate.lat === 'number' &&
-    typeof candidate.name === 'string'
-  );
-}
-
-// Installs from before markers moved to IndexedDB kept them as a JSON blob
-// in localStorage under the same key. Fold that in once, then drop it.
-function migrateLegacyMarkersFromLocalStorage(): LegacyLocalMarker[] {
-  const stored = readValue(MARKERS_STORAGE_KEY);
-  writeValue(MARKERS_STORAGE_KEY, '');
-  if (!stored) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.filter(isLegacyLocalMarker) : [];
-  } catch {
-    return [];
-  }
-}
-
-// Installs from before markers moved to the `markers` table kept them as a
-// single JSON blob under one key in the old `kv` store. Fold that in once
-// (falling back to the even older localStorage blob), then drop it.
-async function migrateLegacyMarkersToTable(): Promise<LegacyLocalMarker[]> {
-  const stored = await kvGet<LegacyLocalMarker[]>(MARKERS_STORAGE_KEY);
-  if (stored !== undefined) {
-    await kvDelete(MARKERS_STORAGE_KEY);
-    return Array.isArray(stored) ? stored.filter(isLegacyLocalMarker) : [];
-  }
-  return migrateLegacyMarkersFromLocalStorage();
-}
-
-// Local markers were retired in favor of server-backed GeoObjects. This only
-// reads whatever's left in the old `markers` table (folding in any
-// even-older storage formats first) so the app can offer a one-time
-// migration onto a chosen server map; nothing writes to this table anymore
-// outside of that fold-in.
-export async function loadLegacyMarkers(): Promise<LegacyLocalMarker[]> {
-  const stored =
-    await tableGetAllOrdered<LegacyLocalMarker>(MARKERS_TABLE_NAME);
-  if (stored.length > 0) {
-    return stored.filter(isLegacyLocalMarker);
-  }
-  const migrated = await migrateLegacyMarkersToTable();
-  if (migrated.length > 0) {
-    await tableReplaceAllOrdered(MARKERS_TABLE_NAME, migrated);
-  }
-  return migrated;
-}
-
-export async function clearLegacyMarkers(): Promise<void> {
-  await tableReplaceAllOrdered(MARKERS_TABLE_NAME, []);
-}
-
-// Rewrites the legacy table to hold exactly these markers - used after a
-// partial migration so already-succeeded markers aren't left behind to be
-// re-migrated (and duplicated) on the next attempt.
-export async function saveLegacyMarkers(
-  markers: LegacyLocalMarker[],
-): Promise<void> {
-  await tableReplaceAllOrdered(MARKERS_TABLE_NAME, markers);
-}
-
-export async function loadCachedGeoObjects(): Promise<GeoObjectEntry[]> {
-  return tableGetAll<GeoObjectEntry>(GEO_OBJECTS_TABLE_NAME);
-}
-
-// Replaces every cached GeoObject row for a single overlay, leaving other
-// overlays' cached rows untouched - the source of truth for "what does this
-// overlay currently show" is always the last successful fetch or mutation.
-export async function saveGeoObjectsForOverlay(
-  overlayId: string,
-  entries: GeoObjectEntry[],
-): Promise<void> {
-  try {
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(GEO_OBJECTS_TABLE_NAME, 'readwrite');
-      const store = transaction.objectStore(GEO_OBJECTS_TABLE_NAME);
-      const index = store.index(GEO_OBJECTS_OVERLAY_INDEX_NAME);
-      const cursorRequest = index.openCursor(IDBKeyRange.only(overlayId));
-      cursorRequest.onsuccess = () => {
-        const cursor = cursorRequest.result;
-        if (cursor) {
-          cursor.delete();
-          cursor.continue();
-        } else {
-          entries.forEach((entry) => store.put(entry));
-        }
-      };
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  } catch {
-    // IndexedDB unavailable (e.g. private browsing) - skip persistence
-  }
-}
-
-export function loadActiveOverlayId(): string | null {
-  return readValue(ACTIVE_OVERLAY_ID_STORAGE_KEY) || null;
-}
-
-export function saveActiveOverlayId(id: string | null): void {
-  writeValue(ACTIVE_OVERLAY_ID_STORAGE_KEY, id ?? '');
-}
-
-export function loadShowMarkerLabels(): boolean {
-  return readValue(SHOW_MARKER_LABELS_STORAGE_KEY) === 'true';
-}
-
-export function saveShowMarkerLabels(show: boolean): void {
-  writeValue(SHOW_MARKER_LABELS_STORAGE_KEY, show ? 'true' : '');
-}
-
-export function loadShowAllMarkers(): boolean {
-  const stored = readValue(SHOW_ALL_MARKERS_STORAGE_KEY);
-  return stored === '' ? false : stored === 'true';
-}
-
-export function saveShowAllMarkers(show: boolean): void {
-  writeValue(SHOW_ALL_MARKERS_STORAGE_KEY, show ? 'true' : 'false');
-}
-
-export function loadMarkersEnabled(): boolean {
-  const stored = readValue(MARKERS_ENABLED_STORAGE_KEY);
-  return stored === '' ? false : stored === 'true';
-}
-
-export function saveMarkersEnabled(enabled: boolean): void {
-  writeValue(MARKERS_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
-}
-
-export function loadEnabledOverlayKeys(): string[] {
-  const stored = readValue(ENABLED_OVERLAYS_STORAGE_KEY);
-  if (!stored) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed)
-      ? parsed.filter((key): key is string => typeof key === 'string')
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveEnabledOverlayKeys(keys: string[]): void {
-  writeValue(
-    ENABLED_OVERLAYS_STORAGE_KEY,
-    keys.length > 0 ? JSON.stringify(keys) : '',
-  );
-}
-
-export function loadOverlayOpacities(): Record<string, number> {
-  const stored = readValue(OVERLAY_OPACITIES_STORAGE_KEY);
-  if (!stored) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(stored);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {};
-    }
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, number] => typeof entry[1] === 'number',
-      ),
-    );
-  } catch {
-    return {};
-  }
-}
-
-export function saveOverlayOpacities(opacities: Record<string, number>): void {
-  writeValue(
-    OVERLAY_OPACITIES_STORAGE_KEY,
-    Object.keys(opacities).length > 0 ? JSON.stringify(opacities) : '',
-  );
 }

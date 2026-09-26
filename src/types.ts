@@ -26,6 +26,12 @@ export interface Overlay {
   versionPinned?: boolean;
 }
 
+export interface ConnectedServer {
+  id: string;
+  baseUrl: string;
+  name: string;
+}
+
 export interface MapPosition {
   center: [number, number];
   zoom: number;
@@ -44,13 +50,4 @@ export interface GeoObjectEntry {
   mapVersion: string;
   mapName: string;
   serverBaseUrl: string;
-}
-
-// Shape of a legacy local marker, kept only for the one-time migration path
-// (reading old data out of the retired `markers` IndexedDB table).
-export interface LegacyLocalMarker {
-  id: string;
-  lng: number;
-  lat: number;
-  name: string;
 }

@@ -4,6 +4,8 @@ import Paper from '@mui/material/Paper';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import Slider from '@mui/material/Slider';
 import Switch from '@mui/material/Switch';
 import { useConnectedServers } from '../../context/ConnectedServersContext.tsx';
@@ -17,6 +19,8 @@ export default function OverlaysSettings() {
     setOverlayEnabled,
     getOverlayOpacity,
     setOverlayOpacity,
+    getOverlayVersion,
+    setOverlayVersion,
   } = useOverlays();
 
   return (
@@ -37,6 +41,17 @@ export default function OverlaysSettings() {
                 <List dense disablePadding>
                   {serverOverlays.map((overlay, index) => {
                     const enabled = enabledOverlayIds.includes(overlay.uuid);
+                    const version = getOverlayVersion(overlay);
+                    // Cached overlays from before versions were fetched have
+                    // none listed, but the current one always exists.
+                    const versionOptions = overlay.versions.some(
+                      (v) => v.version === overlay.currentVersion,
+                    )
+                      ? overlay.versions.map((v) => v.version)
+                      : [
+                          overlay.currentVersion,
+                          ...overlay.versions.map((v) => v.version),
+                        ];
                     return (
                       <ListItem
                         key={overlay.uuid}
@@ -61,7 +76,7 @@ export default function OverlaysSettings() {
                         <ListItemText
                           primary={overlay.name}
                           secondary={[
-                            `v${overlay.currentVersion}`,
+                            `v${version}`,
                             overlay.syncRemoteName &&
                               `Mirrored from ${overlay.syncRemoteName}`,
                             overlay.description,
@@ -70,6 +85,28 @@ export default function OverlaysSettings() {
                             .join(' · ')}
                           slotProps={{ secondary: { noWrap: true } }}
                         />
+                        {enabled && (
+                          <Select
+                            size="small"
+                            variant="standard"
+                            value={version}
+                            onChange={(event) =>
+                              setOverlayVersion(overlay, event.target.value)
+                            }
+                            inputProps={{
+                              'aria-label': `${overlay.name} version`,
+                            }}
+                            sx={{ flexShrink: 0, ml: 2 }}
+                          >
+                            {versionOptions.map((option) => (
+                              <MenuItem key={option} value={option}>
+                                v{option}
+                                {option === overlay.currentVersion &&
+                                  ' (current)'}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        )}
                         {enabled && (
                           <Slider
                             size="small"

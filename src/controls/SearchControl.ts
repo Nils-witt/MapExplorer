@@ -5,6 +5,8 @@ export interface SearchableGeoObject {
   label: string;
   sublabel: string;
   searchText: string;
+  latitude: number;
+  longitude: number;
 }
 
 const SEARCH_ICON_SVG =
@@ -20,7 +22,11 @@ export class SearchControl implements IControl {
   private resultsList: HTMLUListElement | undefined;
   private items: SearchableGeoObject[] = [];
   private expanded = false;
-  private onSelect: (uuid: string) => void = () => {};
+  private onSelect: (
+    uuid: string,
+    latitude: number,
+    longitude: number,
+  ) => void = () => {};
 
   onAdd(_map: MapLibreMap): HTMLElement {
     this.container = document.createElement('div');
@@ -72,7 +78,9 @@ export class SearchControl implements IControl {
     this.renderResults();
   }
 
-  setOnSelect(onSelect: (uuid: string) => void): void {
+  setOnSelect(
+    onSelect: (uuid: string, latitude: number, longitude: number) => void,
+  ): void {
     this.onSelect = onSelect;
   }
 
@@ -140,7 +148,7 @@ export class SearchControl implements IControl {
       }
 
       item.addEventListener('click', () => {
-        this.onSelect(match.uuid);
+        this.onSelect(match.uuid, match.latitude, match.longitude);
         this.collapse();
       });
       this.resultsList.appendChild(item);

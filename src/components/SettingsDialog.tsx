@@ -48,7 +48,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               Overlays
             </Button>
           </Stack>
-          <Box>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Stack sx={{ pt: 1 }}>
               {openTabs === 'connectedServers' && <ConnectedServersSettings />}
               {openTabs === 'user' && <UserSettingsComponent />}
