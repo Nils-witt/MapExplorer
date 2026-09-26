@@ -10,3 +10,7 @@ dist-ssr
 .env
 .env.*
 !.env.example
+dev-dist
+tsconfig.tsbuildinfo
+.claude
+.agents

@@ -68,7 +68,6 @@ export default function OverlayCacheButton({
     update({ status: 'caching', done: 0, total: 0 });
     try {
       const result = await cacheOverlayTiles(
-        server.id,
         server.baseUrl,
         accessToken,
         overlay.uuid,

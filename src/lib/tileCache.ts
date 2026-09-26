@@ -27,7 +27,6 @@ export async function isOverlayCached(
 
 // Downloads every tile listed in the version's manifest into its cache.
 export async function cacheOverlayTiles(
-  serverId: string,
   baseUrl: string,
   accessToken: string | null,
   mapUuid: string,
