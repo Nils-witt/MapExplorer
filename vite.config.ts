@@ -37,8 +37,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      devOptions: {
+        enabled: true,
+        navigateFallback: 'index.html',
+        // Nothing is built in dev, so the precache glob never matches.
+        suppressWarnings: true,
+      },
       manifest: {
         name: 'MapExplorer',
         short_name: 'MapExplorer',
@@ -72,17 +78,38 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/config\.json/],
         runtimeCaching: [
           {
-            // Raster/vector map tiles, e.g. .../{z}/{x}/{y}.png or .../{z}/{x}/{y}.pbf
+            // vector map tiles, e.g. .../{z}/{x}/{y}.pbf
             // A plain RegExp route only matches cross-origin URLs when the
             // match starts at index 0, which tile URLs never do - so this
             // must be a function matcher instead of a bare RegExp.
             urlPattern: ({ url }) =>
-              /\/\d{1,2}\/\d{1,8}\/\d{1,8}(\.[a-zA-Z0-9]+)?(\?.*)?$/.test(
-                url.href,
-              ),
+              /\/\d{1,2}\/\d{1,8}\/\d{1,8}(\.pbf)$/.test(url.href),
             handler: 'CacheFirst',
             options: {
               cacheName: 'map-tiles-cache',
+              expiration: {
+                // Sized to comfortably hold a background-tile pre-cache
+                // (zoom 8-14 over an overlay's area) alongside ordinary
+                // browsing, so precached tiles aren't evicted by casual
+                // panning elsewhere on the map.
+                maxEntries: 20000,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            // Raster/map tiles, e.g. .../{z}/{x}/{y}.png
+            // A plain RegExp route only matches cross-origin URLs when the
+            // match starts at index 0, which tile URLs never do - so this
+            // must be a function matcher instead of a bare RegExp.
+            urlPattern: ({ url }) =>
+              /\/\d{1,2}\/\d{1,8}\/\d{1,8}(\.png)$/.test(url.href),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'overlay-tiles-cache',
               expiration: {
                 // Sized to comfortably hold a background-tile pre-cache
                 // (zoom 8-14 over an overlay's area) alongside ordinary

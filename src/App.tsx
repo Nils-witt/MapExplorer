@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { DataProviders } from './context/DataProviders';
 import { MapView } from './components/MapView';
 import { RequireAuth } from './components/RequireAuth';
+import { UpdatePrompt } from './components/UpdatePrompt';
 import LoginPage from './pages/LoginPage.tsx';
 import LoginCallbackPage from './pages/LoginCallbackPage.tsx';
 
@@ -21,6 +22,7 @@ export function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      <UpdatePrompt />
     </AuthProvider>
   );
 }
