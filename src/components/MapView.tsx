@@ -96,6 +96,22 @@ export function MapView() {
     }
   }, []);
 
+  // Layers are only stacked in render order when first added, so move them
+  // to the top one by one, bottom first, whenever the order changes.
+  const overlayOrder = enabledOverlays.map((overlay) => overlay.id).join(',');
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map || !overlayOrder) {
+      return;
+    }
+    for (const id of overlayOrder.split(',')) {
+      const layerId = `overlay-layer-${id}`;
+      if (map.getLayer(layerId)) {
+        map.moveLayer(layerId);
+      }
+    }
+  }, [overlayOrder]);
+
   const handleMoveEnd = (event: ViewStateChangeEvent) => {
     const { longitude, latitude, zoom, bearing, pitch } = event.viewState;
     saveMapPosition({ center: [longitude, latitude], zoom, bearing, pitch });

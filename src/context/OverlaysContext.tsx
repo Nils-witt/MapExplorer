@@ -27,6 +27,7 @@ export const DEFAULT_OVERLAY_OPACITY = 0.8;
 // An enabled overlay resolved to what the map needs to draw it.
 export interface EnabledOverlay {
   id: string;
+  name: string;
   serverId: string;
   // The version drawn.
   version: string;
@@ -38,14 +39,17 @@ interface OverlaysContextValue {
   overlays: Record<string, OverlayMap[]>;
   enabledOverlayIds: string[];
   setOverlayEnabled: (overlayId: string, enabled: boolean) => void;
+  // Moves an enabled overlay one step up (drawn above the next one) or down
+  // in the draw order.
+  moveOverlay: (overlayId: string, direction: 'up' | 'down') => void;
   getOverlayOpacity: (overlayId: string) => number;
   setOverlayOpacity: (overlayId: string, opacity: number) => void;
   // The version drawn for an overlay: the one the user picked, or its
   // currentVersion.
   getOverlayVersion: (overlay: OverlayMap) => string;
   setOverlayVersion: (overlay: OverlayMap, version: string) => void;
-  // Enabled overlays in the order they were switched on, so the most
-  // recently enabled one is drawn on top.
+  // Enabled overlays in draw order, bottom first. Newly enabled overlays
+  // are added on top.
   enabledOverlays: EnabledOverlay[];
   // Geo objects of every version of every known overlay.
   geoObjects: GeoObjectsByServer;
@@ -296,12 +300,45 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     return result;
   }, [enabledOverlayIds, overlays, overlayServers, getOverlayVersion]);
 
+  const moveOverlay = useCallback(
+    (overlayId: string, direction: 'up' | 'down') => {
+      // Swap with the nearest neighbor that's actually drawn, skipping
+      // overlays whose server is unreachable.
+      const drawnIds = new Set(
+        enabledSources.map(({ overlay }) => overlay.uuid),
+      );
+      setEnabledOverlayIds((prev) => {
+        const index = prev.indexOf(overlayId);
+        if (index === -1) {
+          return prev;
+        }
+        const step = direction === 'up' ? 1 : -1;
+        let other = index + step;
+        while (
+          other >= 0 &&
+          other < prev.length &&
+          !drawnIds.has(prev[other])
+        ) {
+          other += step;
+        }
+        if (other < 0 || other >= prev.length) {
+          return prev;
+        }
+        const next = [...prev];
+        [next[index], next[other]] = [next[other], next[index]];
+        return next;
+      });
+    },
+    [enabledSources],
+  );
+
   const enabledOverlays = useMemo(
     () =>
       enabledSources.map(({ overlay, server, version }): EnabledOverlay => {
         const baseUrl = server.baseUrl.replace(/\/+$/, '');
         return {
           id: overlay.uuid,
+          name: overlay.name,
           serverId: server.id,
           version,
           tiles: [
@@ -318,6 +355,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       overlays,
       enabledOverlayIds,
       setOverlayEnabled,
+      moveOverlay,
       getOverlayOpacity,
       setOverlayOpacity,
       getOverlayVersion,
@@ -329,6 +367,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       overlays,
       enabledOverlayIds,
       setOverlayEnabled,
+      moveOverlay,
       getOverlayOpacity,
       setOverlayOpacity,
       getOverlayVersion,

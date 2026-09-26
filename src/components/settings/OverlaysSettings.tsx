@@ -5,6 +5,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
@@ -15,6 +16,8 @@ import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import Slider from '@mui/material/Slider';
 import Switch from '@mui/material/Switch';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import { useConnectedServers } from '../../context/ConnectedServersContext.tsx';
 import { useOverlays } from '../../context/OverlaysContext.tsx';
 import OverlayCacheButton from './OverlayCacheButton.tsx';
@@ -26,6 +29,8 @@ export default function OverlaysSettings() {
     overlays,
     enabledOverlayIds,
     setOverlayEnabled,
+    moveOverlay,
+    enabledOverlays,
     getOverlayOpacity,
     setOverlayOpacity,
     getOverlayVersion,
@@ -54,6 +59,47 @@ export default function OverlaysSettings() {
 
   return (
     <Stack spacing={1.5}>
+      {enabledOverlays.length > 1 && (
+        <Stack spacing={0.5}>
+          <Typography variant="overline" color="text.secondary">
+            Draw order
+          </Typography>
+          <Paper variant="outlined">
+            <List dense disablePadding>
+              {/* Top-most overlay first. */}
+              {enabledOverlays.toReversed().map((overlay, index, list) => (
+                <ListItem
+                  key={overlay.id}
+                  divider={index < list.length - 1}
+                  secondaryAction={
+                    <>
+                      <IconButton
+                        size="small"
+                        disabled={index === 0}
+                        onClick={() => moveOverlay(overlay.id, 'up')}
+                        aria-label={`Move ${overlay.name} up`}
+                      >
+                        <ArrowUpwardIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        edge="end"
+                        disabled={index === list.length - 1}
+                        onClick={() => moveOverlay(overlay.id, 'down')}
+                        aria-label={`Move ${overlay.name} down`}
+                      >
+                        <ArrowDownwardIcon fontSize="small" />
+                      </IconButton>
+                    </>
+                  }
+                >
+                  <ListItemText primary={overlay.name} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+        </Stack>
+      )}
       {overlayServers.map((server) => {
         const serverOverlays = overlays[server.id] ?? [];
         return (
