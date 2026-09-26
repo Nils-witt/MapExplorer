@@ -54,6 +54,13 @@ export interface OverlayGeoObject {
   groups: string[];
 }
 
+// A tile listed in a map version's `index.json`.
+export interface OverlayTile {
+  z: number;
+  x: number;
+  y: number;
+}
+
 // Query filters of `GET /maps`.
 export interface ListOverlaysFilter {
   // Case-insensitive substring match on the map name.
@@ -163,6 +170,25 @@ export class OverlayServer {
       search ? `${path}?${search}` : path,
       signal,
     );
+  }
+
+  // URL of one of a map version's tiles.
+  tileUrl(mapUuid: string, version: string, tile: OverlayTile): string {
+    return `${this.baseUrl}/maps/${encodeURIComponent(mapUuid)}/version/${encodeURIComponent(version)}/${tile.z}/${tile.x}/${tile.y}.png`;
+  }
+
+  // Lists every tile a map version has, from the `index.json` the server
+  // writes alongside them.
+  async listTiles(
+    mapUuid: string,
+    version: string,
+    signal?: AbortSignal,
+  ): Promise<OverlayTile[]> {
+    const manifest = await this.request<{ tiles: OverlayTile[] }>(
+      `/maps/${encodeURIComponent(mapUuid)}/version/${encodeURIComponent(version)}/index.json`,
+      signal,
+    );
+    return manifest.tiles;
   }
 
   private async request<T>(path: string, signal?: AbortSignal): Promise<T> {

@@ -94,6 +94,17 @@ export default defineConfig({
               cacheableResponse: {
                 statuses: [0, 200],
               },
+              plugins: [
+                {
+                  // Overlays cached from the settings live in caches of
+                  // their own (`<server id>-<map uuid>-<version>`), so fall
+                  // back to searching every cache before hitting the network.
+                  cachedResponseWillBeUsed: async ({
+                    cachedResponse,
+                    request,
+                  }) => cachedResponse ?? (await caches.match(request)) ?? null,
+                },
+              ],
             },
           },
           {

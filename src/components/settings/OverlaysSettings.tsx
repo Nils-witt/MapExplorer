@@ -1,3 +1,10 @@
+import { useState } from 'react';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
@@ -10,6 +17,8 @@ import Slider from '@mui/material/Slider';
 import Switch from '@mui/material/Switch';
 import { useConnectedServers } from '../../context/ConnectedServersContext.tsx';
 import { useOverlays } from '../../context/OverlaysContext.tsx';
+import OverlayCacheButton from './OverlayCacheButton.tsx';
+import { deleteAllCaches, isTileCacheSupported } from '../../lib/tileCache.ts';
 
 export default function OverlaysSettings() {
   const { overlayServers } = useConnectedServers();
@@ -22,6 +31,26 @@ export default function OverlaysSettings() {
     getOverlayVersion,
     setOverlayVersion,
   } = useOverlays();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<string | null>(null);
+  // Bumped after deleting so the cache buttons remount and recheck.
+  const [cacheGeneration, setCacheGeneration] = useState(0);
+
+  const handleDeleteAll = async () => {
+    setDeleting(true);
+    try {
+      const count = await deleteAllCaches();
+      setDeleteResult(`Deleted ${count} cache${count === 1 ? '' : 's'}.`);
+    } catch (error) {
+      console.error('Failed to delete caches:', error);
+      setDeleteResult('Failed to delete caches.');
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setCacheGeneration((prev) => prev + 1);
+    }
+  };
 
   return (
     <Stack spacing={1.5}>
@@ -125,6 +154,12 @@ export default function OverlaysSettings() {
                             sx={{ width: 120, flexShrink: 0, mx: 2 }}
                           />
                         )}
+                        <OverlayCacheButton
+                          key={cacheGeneration}
+                          server={server}
+                          overlay={overlay}
+                          version={version}
+                        />
                       </ListItem>
                     );
                   })}
@@ -134,6 +169,54 @@ export default function OverlaysSettings() {
           </Stack>
         );
       })}
+      {isTileCacheSupported() && (
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{ alignItems: 'center', justifyContent: 'flex-end' }}
+        >
+          {deleteResult && (
+            <Typography variant="body2" color="text.secondary">
+              {deleteResult}
+            </Typography>
+          )}
+          <Button
+            color="error"
+            variant="outlined"
+            onClick={() => {
+              setDeleteResult(null);
+              setConfirmOpen(true);
+            }}
+          >
+            Delete all caches
+          </Button>
+        </Stack>
+      )}
+      <Dialog
+        open={confirmOpen}
+        onClose={() => !deleting && setConfirmOpen(false)}
+      >
+        <DialogTitle>Delete all caches?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Every overlay cached for offline use and all map tiles and styles
+            cached while browsing will be deleted. They are downloaded again
+            when next needed, which requires a connection.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            onClick={() => void handleDeleteAll()}
+            disabled={deleting}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
