@@ -99,7 +99,7 @@ export default defineConfig({
         description: 'Explore maps with custom tile overlays, offline-capable.',
         theme_color: '#1976d2',
         background_color: '#ffffff',
-        display: 'standalone',
+        display: 'fullscreen',
         start_url: '/',
         icons: [
           {
