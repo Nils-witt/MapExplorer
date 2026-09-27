@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
 import { ConnectedServersProvider } from './ConnectedServersContext';
+import { DisplaySettingsProvider } from './DisplaySettingsContext';
 import { OverlaysProvider } from './OverlaysContext';
 import { UnitsProvider } from './UnitsContext';
 
@@ -10,7 +11,9 @@ export function DataProviders() {
     <ConnectedServersProvider>
       <OverlaysProvider>
         <UnitsProvider>
-          <Outlet />
+          <DisplaySettingsProvider>
+            <Outlet />
+          </DisplaySettingsProvider>
         </UnitsProvider>
       </OverlaysProvider>
     </ConnectedServersProvider>

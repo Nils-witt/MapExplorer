@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { Marker, Popup } from '@vis.gl/react-maplibre';
 import type { Unit, UnitPosition } from '../api/UnitServer';
+import { useDisplaySettings } from '../context/DisplaySettingsContext';
 import { useUnits } from '../context/UnitsContext';
 import { formatTacticalName, symbolDataUrl } from '../lib/unitSymbol';
 import './UnitMarkers.scss';
@@ -10,6 +11,7 @@ import './UnitMarkers.scss';
 // tactical symbol (or a dot without one), with a popup on click.
 export function UnitMarkers() {
   const { allUnits } = useUnits();
+  const { unitSymbolSize } = useDisplaySettings();
   // `${serverId}/${unitId}` of the unit whose popup is open.
   const [openKey, setOpenKey] = useState<string | null>(null);
 
@@ -25,6 +27,7 @@ export function UnitMarkers() {
         unit={unit}
         position={unit.position}
         popupOpen={openKey === key}
+        symbolSize={unitSymbolSize}
         setOpenKey={setOpenKey}
       />
     );
@@ -56,12 +59,14 @@ const UnitMarker = memo(function UnitMarker({
   unit,
   position,
   popupOpen,
+  symbolSize,
   setOpenKey,
 }: {
   markerKey: string;
   unit: Unit;
   position: UnitPosition;
   popupOpen: boolean;
+  symbolSize: number;
   setOpenKey: Dispatch<SetStateAction<string | null>>;
 }) {
   const src = useMemo(
@@ -81,7 +86,11 @@ const UnitMarker = memo(function UnitMarker({
         }}
         anchor={'bottom-right'}
       >
-        <div className="unit-marker" title={unit.name}>
+        <div
+          className="unit-marker"
+          title={unit.name}
+          style={{ '--unit-symbol-size': `${symbolSize}px` } as CSSProperties}
+        >
           {src ? (
             <img className="unit-marker__symbol" src={src} alt={unit.name} />
           ) : (

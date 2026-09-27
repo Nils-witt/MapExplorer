@@ -17,6 +17,7 @@ import ConnectedServersSettings from './settings/ConnectedServersSettings.tsx';
 import OverlaysSettings from './settings/OverlaysSettings.tsx';
 import ServiceWorkerSettings from './settings/ServiceWorkerSettings.tsx';
 import UnitsSettings from './settings/UnitsSettings.tsx';
+import DisplaySettings from './settings/DisplaySettings.tsx';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -26,11 +27,18 @@ interface SettingsDialogProps {
 }
 
 type OpenTabs =
-  'user' | 'map' | 'connectedServers' | 'overlays' | 'units' | 'offline';
+  | 'user'
+  | 'map'
+  | 'display'
+  | 'connectedServers'
+  | 'overlays'
+  | 'units'
+  | 'offline';
 
 const TABS: { value: OpenTabs; label: string }[] = [
   { value: 'user', label: 'User' },
   { value: 'map', label: 'Basemap' },
+  { value: 'display', label: 'Display Options' },
   { value: 'connectedServers', label: 'Connected Servers' },
   { value: 'overlays', label: 'Overlays' },
   { value: 'units', label: 'Units' },
@@ -106,6 +114,7 @@ export function SettingsDialog({
                 onApplyStyle={onApplyStyle}
               />
             )}
+            {openTabs === 'display' && <DisplaySettings />}
             {openTabs === 'overlays' && <OverlaysSettings />}
             {openTabs === 'units' && <UnitsSettings />}
             {openTabs === 'offline' && <ServiceWorkerSettings />}

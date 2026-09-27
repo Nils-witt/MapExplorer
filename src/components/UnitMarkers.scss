@@ -22,8 +22,22 @@
   }
 
   &__symbol {
-    height: 50px;
+    // Set from the display settings.
+    height: var(--unit-symbol-size, 50px);
     filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  }
+
+  // Under a symbol the label takes the symbol's width instead of widening
+  // the marker, and cuts off text that doesn't fit.
+  // The font scales with it, 12px at the default size.
+  &__symbol + .labelbox {
+    box-sizing: border-box;
+    font-size: calc(var(--unit-symbol-size, 50px) * 0.24);
+    width: 0;
+    min-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   &__label {

@@ -389,3 +389,25 @@ export function loadMapPosition(): MapPosition | null {
 export function saveMapPosition(position: MapPosition): void {
   writeValue(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
 }
+
+const UNIT_SYMBOL_SIZE_STORAGE_KEY = 'mapexplorer.unitSymbolSize';
+export const DEFAULT_UNIT_SYMBOL_SIZE = 50;
+export const MIN_UNIT_SYMBOL_SIZE = 20;
+export const MAX_UNIT_SYMBOL_SIZE = 120;
+
+// Height of unit symbols on the map, in pixels.
+export function loadUnitSymbolSize(): number {
+  const stored = Number(readValue(UNIT_SYMBOL_SIZE_STORAGE_KEY));
+  if (!stored || !Number.isFinite(stored)) {
+    return DEFAULT_UNIT_SYMBOL_SIZE;
+  }
+  return Math.min(MAX_UNIT_SYMBOL_SIZE, Math.max(MIN_UNIT_SYMBOL_SIZE, stored));
+}
+
+// The default size isn't stored, so a changed default applies.
+export function saveUnitSymbolSize(size: number): void {
+  writeValue(
+    UNIT_SYMBOL_SIZE_STORAGE_KEY,
+    size === DEFAULT_UNIT_SYMBOL_SIZE ? '' : String(size),
+  );
+}
