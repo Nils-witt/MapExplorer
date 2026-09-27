@@ -40,13 +40,16 @@ export function formatTacticalName(
     return null;
   }
   const { organisation, regionalAssociation, localAssociation } = tacticalName;
-  const suffix = [tacticalName.function, tacticalName.number]
+  const suffix = [
+    tacticalName.function,
+    (tacticalName.number ?? '').padStart(2, '0'),
+  ]
     .filter(Boolean)
     .join('-');
   const text = [
     organisation,
     regionalAssociation,
-    [localAssociation, suffix].filter(Boolean).join('/'),
+    [localAssociation?.padStart(2, '0'), suffix].filter(Boolean).join(' '),
   ]
     .filter(Boolean)
     .join(' ');

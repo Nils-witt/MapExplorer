@@ -30,6 +30,25 @@ export function UnitMarkers() {
   });
 }
 
+function timestampToRelativeTime(dateStr: string): string {
+  const timestamp = new Date(dateStr).getTime();
+  const now = Date.now();
+  const diffSeconds = Math.floor((now - timestamp) / 1000);
+  console.log(
+    `timestampToRelativeTime: now=${now}, timestamp=${timestamp}, diffSeconds=${diffSeconds}`,
+  );
+  if (diffSeconds < 60) {
+    return `${diffSeconds} s ago`;
+  } else if (diffSeconds < 3600) {
+    const minutes = Math.floor(diffSeconds / 60);
+    return `${minutes} min ago`;
+  } else if (diffSeconds < 86400) {
+    const hours = Math.floor(diffSeconds / 3600);
+    return `${hours} h ago`;
+  }
+  return `>24 h ago`;
+}
+
 // Memoized so a change to one unit doesn't re-render every other marker.
 const UnitMarker = memo(function UnitMarker({
   markerKey,
@@ -59,6 +78,7 @@ const UnitMarker = memo(function UnitMarker({
           event.originalEvent.stopPropagation();
           setOpenKey((prev) => (prev === markerKey ? null : markerKey));
         }}
+        anchor={'bottom-right'}
       >
         <div className="unit-marker" title={unit.name}>
           {src ? (
@@ -66,7 +86,11 @@ const UnitMarker = memo(function UnitMarker({
           ) : (
             <span className="unit-marker__dot" />
           )}
-          <span className="unit-marker__label">{unit.name}</span>
+          <div className="labelbox">
+            {unit.position?.timestamp && (
+              <>{timestampToRelativeTime(unit.position.timestamp)}</>
+            )}
+          </div>
         </div>
       </Marker>
       {popupOpen && (
