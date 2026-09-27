@@ -15,6 +15,7 @@ import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import Alert from '@mui/material/Alert';
+import { FullscreenButtonControl } from './mapControls/FullscreenButtonControl';
 import { SearchButtonControl } from './mapControls/SearchButtonControl';
 import { SettingsButtonControl } from './mapControls/SettingsButtonControl';
 import { UnitMarkers } from './UnitMarkers';
@@ -181,6 +182,7 @@ export function MapView() {
           positionOptions={{ enableHighAccuracy: true }}
           trackUserLocation
         />
+        <FullscreenButtonControl />
         <SettingsButtonControl
           onOpen={() => {
             setSettingsLoaded(true);
