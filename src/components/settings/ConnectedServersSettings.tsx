@@ -17,6 +17,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import {
   CONFIGURED_OVERLAY_SERVER_ID,
   CONFIGURED_UNIT_SERVER_ID,
+  isConfiguredServerId,
 } from '../../lib/config.ts';
 import { type ConnectedServer, isServerEnabled } from '../../types.ts';
 
@@ -66,7 +67,7 @@ export default function ConnectedServersSettings() {
             />
             <RemoveServerButton
               server={server}
-              configuredId={CONFIGURED_OVERLAY_SERVER_ID}
+              configuredPrefix={CONFIGURED_OVERLAY_SERVER_ID}
               onRemove={() =>
                 setOverlayServers((prev) =>
                   prev.filter((other) => other.id !== server.id),
@@ -124,7 +125,7 @@ export default function ConnectedServersSettings() {
             />
             <RemoveServerButton
               server={server}
-              configuredId={CONFIGURED_UNIT_SERVER_ID}
+              configuredPrefix={CONFIGURED_UNIT_SERVER_ID}
               onRemove={() =>
                 setUnitServers((prev) =>
                   prev.filter((other) => other.id !== server.id),
@@ -202,16 +203,16 @@ function EnableServerSwitch({
 
 function RemoveServerButton({
   server,
-  configuredId,
+  configuredPrefix,
   onRemove,
 }: {
   server: ConnectedServer;
-  // Id of the server the app configuration sets for this list.
-  configuredId: string;
+  // Id prefix of the servers the app configuration sets for this list.
+  configuredPrefix: string;
   onRemove: () => void;
 }) {
-  // The configured server would come back with the next start.
-  const configured = server.id === configuredId;
+  // A configured server would come back with the next start.
+  const configured = isConfiguredServerId(server.id, configuredPrefix);
   return (
     <IconButton
       aria-label={`Remove ${server.name}`}

@@ -13,12 +13,16 @@ export interface AppConfig {
   mapStyles?: MapStyle[];
   oidcIssuer?: string;
   oidcClientId?: string;
-  // Overlay server (tileserve-go) and unit server (go-unit-mangement) every
-  // user is connected to; the names default to the host.
-  defaultOverlaysServer?: string;
-  defaultOverlaysServerName?: string;
-  defaultUnitsServer?: string;
-  defaultUnitsServerName?: string;
+  // Overlay servers (tileserve-go) and unit servers (go-unit-mangement)
+  // every user is connected to.
+  overlayServers?: ServerConfig[];
+  unitServers?: ServerConfig[];
+}
+
+// A server the deployment connects to; the name defaults to the host.
+export interface ServerConfig {
+  name?: string;
+  url: string;
 }
 
 let configPromise: Promise<AppConfig> | null = null;
@@ -40,14 +44,19 @@ export function loadAppConfig(): Promise<AppConfig> {
   return configPromise;
 }
 
-// Fixed ids, so the configured servers are recognized in the stored lists.
+// Configured servers get ids from these prefixes and their url, so they're
+// recognized in the stored lists. Before config.json could list several, the
+// one configured server had the bare prefix as its id.
 export const CONFIGURED_OVERLAY_SERVER_ID = 'configured-overlay-server';
 export const CONFIGURED_UNIT_SERVER_ID = 'configured-unit-server';
 
+export function isConfiguredServerId(id: string, prefix: string): boolean {
+  return id === prefix || id.startsWith(`${prefix}:`);
+}
+
 export interface ConfiguredServers {
-  // Null when none is configured.
-  overlayServer: ConnectedServer | null;
-  unitServer: ConnectedServer | null;
+  overlayServers: ConnectedServer[];
+  unitServers: ConnectedServer[];
 }
 
 // The servers set by the deployment: in dev mode from VITE_OVERLAY_SERVER_URL
@@ -57,47 +66,56 @@ export async function loadConfiguredServers(): Promise<ConfiguredServers> {
   if (import.meta.env.DEV) {
     const env = import.meta.env;
     return {
-      overlayServer: configuredServer(
-        CONFIGURED_OVERLAY_SERVER_ID,
-        env.VITE_OVERLAY_SERVER_URL,
-        env.VITE_OVERLAY_SERVER_NAME,
-      ),
-      unitServer: configuredServer(
-        CONFIGURED_UNIT_SERVER_ID,
-        env.VITE_UNIT_SERVER_URL,
-        env.VITE_UNIT_SERVER_NAME,
-      ),
+      overlayServers: configuredServers(CONFIGURED_OVERLAY_SERVER_ID, [
+        {
+          url: env.VITE_OVERLAY_SERVER_URL,
+          name: env.VITE_OVERLAY_SERVER_NAME,
+        },
+      ]),
+      unitServers: configuredServers(CONFIGURED_UNIT_SERVER_ID, [
+        { url: env.VITE_UNIT_SERVER_URL, name: env.VITE_UNIT_SERVER_NAME },
+      ]),
     };
   }
   const config = await loadAppConfig();
   return {
-    overlayServer: configuredServer(
+    overlayServers: configuredServers(
       CONFIGURED_OVERLAY_SERVER_ID,
-      config.defaultOverlaysServer,
-      config.defaultOverlaysServerName,
+      config.overlayServers,
     ),
-    unitServer: configuredServer(
+    unitServers: configuredServers(
       CONFIGURED_UNIT_SERVER_ID,
-      config.defaultUnitsServer,
-      config.defaultUnitsServerName,
+      config.unitServers,
     ),
   };
 }
 
-function configuredServer(
-  id: string,
-  baseUrl: string | undefined,
-  name: string | undefined,
-): ConnectedServer | null {
-  if (!baseUrl) {
-    return null;
+// Skips entries without a valid url, and repeats of one.
+function configuredServers(
+  prefix: string,
+  entries: Partial<ServerConfig>[] | undefined,
+): ConnectedServer[] {
+  const servers: ConnectedServer[] = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry?.url) {
+      continue;
+    }
+    let host: string;
+    try {
+      host = new URL(entry.url).host;
+    } catch {
+      console.error(`Ignoring invalid server URL ${entry.url} in the config`);
+      continue;
+    }
+    const baseUrl = entry.url.replace(/\/+$/, '');
+    if (servers.some((server) => server.baseUrl === baseUrl)) {
+      continue;
+    }
+    servers.push({
+      id: `${prefix}:${baseUrl}`,
+      baseUrl,
+      name: entry.name || host,
+    });
   }
-  let host: string;
-  try {
-    host = new URL(baseUrl).host;
-  } catch {
-    console.error(`Ignoring invalid server URL ${baseUrl} in the config`);
-    return null;
-  }
-  return { id, baseUrl: baseUrl.replace(/\/+$/, ''), name: name || host };
+  return servers;
 }

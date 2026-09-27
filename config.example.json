@@ -1,9 +1,7 @@
 {
   "mapStyles": [{ "name": "", "url": "" }],
-  "defaultOverlaysServer": "",
-  "defaultOverlaysServerName": "",
-  "defaultUnitsServer": "",
-  "defaultUnitsServerName": "",
+  "overlayServers": [{ "name": "", "url": "" }],
+  "unitServers": [{ "name": "", "url": "" }],
   "oidcIssuer": "",
   "oidcClientId": ""
 }

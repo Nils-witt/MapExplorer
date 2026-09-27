@@ -5,6 +5,7 @@ import {
   CONFIGURED_OVERLAY_SERVER_ID,
   CONFIGURED_UNIT_SERVER_ID,
   type ConfiguredServers,
+  isConfiguredServerId,
   loadConfiguredServers,
 } from '../lib/config';
 import {
@@ -14,28 +15,37 @@ import {
   saveUnitServers,
 } from '../lib/storage';
 
-// Brings the server the deployment configures (see loadConfiguredServers)
+// Brings the servers the deployment configures (see loadConfiguredServers)
 // into a list: added or updated from the config, or dropped once the config
-// no longer names one. `configured` is undefined when the config couldn't be
-// loaded, which leaves the list as it is. Whether the user disabled it is
+// no longer names them. `configured` is undefined when the config couldn't
+// be loaded, which leaves the list as it is. Whether the user disabled one is
 // kept.
-function withConfiguredServer(
+function withConfiguredServers(
   servers: ConnectedServer[],
-  id: string,
-  configured: ConnectedServer | null | undefined,
+  prefix: string,
+  configured: ConnectedServer[] | undefined,
 ): ConnectedServer[] {
   if (configured === undefined) {
     return servers;
   }
-  const others = servers.filter((server) => server.id !== id);
-  if (!configured) {
-    return others;
-  }
-  return servers.some((server) => server.id === id)
-    ? servers.map((server) =>
-        server.id === id ? { ...configured, enabled: server.enabled } : server,
-      )
-    : [configured, ...others];
+  // The server configured before config.json could list several keeps its
+  // id while its url is still configured, and with it its cached overlays.
+  const legacy = servers.find((server) => server.id === prefix);
+  const byId = new Map(
+    configured.map((server) => {
+      const id = server.baseUrl === legacy?.baseUrl ? prefix : server.id;
+      return [id, { ...server, id }];
+    }),
+  );
+  const kept = servers.flatMap((server) => {
+    if (!isConfiguredServerId(server.id, prefix)) {
+      return [server];
+    }
+    const current = byId.get(server.id);
+    byId.delete(server.id);
+    return current ? [{ ...current, enabled: server.enabled }] : [];
+  });
+  return [...byId.values(), ...kept];
 }
 
 interface ConnectedServersContextValue {
@@ -75,23 +85,26 @@ export function ConnectedServersProvider({
       ([
         storedOverlayServers,
         storedUnitServers,
-        { overlayServer, unitServer },
+        {
+          overlayServers: configuredOverlayServers,
+          unitServers: configuredUnitServers,
+        },
       ]) => {
         if (cancelled) {
           return;
         }
         setOverlayServers(
-          withConfiguredServer(
+          withConfiguredServers(
             storedOverlayServers ?? [],
             CONFIGURED_OVERLAY_SERVER_ID,
-            overlayServer,
+            configuredOverlayServers,
           ),
         );
         setUnitServers(
-          withConfiguredServer(
+          withConfiguredServers(
             storedUnitServers ?? [],
             CONFIGURED_UNIT_SERVER_ID,
-            unitServer,
+            configuredUnitServers,
           ),
         );
         setLoaded(true);
