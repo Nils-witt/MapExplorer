@@ -1,6 +1,9 @@
 {
   "defaultStyleUrl": "",
   "defaultOverlaysServer": "",
+  "defaultOverlaysServerName": "",
+  "defaultUnitsServer": "",
+  "defaultUnitsServerName": "",
   "oidcIssuer": "",
   "oidcClientId": ""
 }

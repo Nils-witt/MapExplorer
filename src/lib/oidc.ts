@@ -4,6 +4,7 @@ import {
   WebStorageStateStore,
 } from 'oidc-client-ts';
 import type { User } from 'oidc-client-ts';
+import { loadAppConfig } from './config';
 
 // OIDC authorization-code flow with PKCE via oidc-client-ts, against the IdP
 // configured via `oidcIssuer` / `oidcClientId` in config.json.
@@ -22,14 +23,7 @@ export async function loadOidcConfig(): Promise<OidcConfig> {
       clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
     };
   }
-  const response = await fetch('/config.json');
-  if (!response.ok) {
-    throw new Error(`Failed to load config.json (${response.status})`);
-  }
-  const config = (await response.json()) as {
-    oidcIssuer?: string;
-    oidcClientId?: string;
-  };
+  const config = await loadAppConfig();
   if (!config.oidcIssuer || !config.oidcClientId) {
     throw new Error(
       'SSO is not configured - set oidcIssuer and oidcClientId in config.json',

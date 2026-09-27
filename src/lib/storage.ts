@@ -2,7 +2,6 @@ import type { OverlayGeoObject, OverlayMap } from '../api/OverlayServer';
 import type { ConnectedServer, MapPosition } from '../types';
 
 const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
-const DEFAULT_SERVER_URL_STORAGE_KEY = 'mapexplorer.serverBaseUrl';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const ENABLED_OVERLAYS_STORAGE_KEY = 'mapexplorer.enabledOverlays';
 const OVERLAY_OPACITIES_STORAGE_KEY = 'mapexplorer.overlayOpacities';
@@ -300,23 +299,10 @@ export function saveGeoObjects(geoObjects: StoredGeoObjects): Promise<void> {
   return tableReplaceAllOrdered(GEO_OBJECTS_TABLE_NAME, records);
 }
 
-export function applyConfig(config: {
-  defaultStyleUrl?: string;
-  defaultOverlaysServer?: string;
-}): void {
-  let modified = false;
+// The configured servers are applied by ConnectedServersProvider.
+export function applyConfig(config: { defaultStyleUrl?: string }): void {
   if (config.defaultStyleUrl && config.defaultStyleUrl !== loadStyleUrl('')) {
     saveStyleUrl(config.defaultStyleUrl);
-    modified = true;
-  }
-  if (
-    config.defaultOverlaysServer &&
-    config.defaultOverlaysServer !== loadDefaultServerUrl('')
-  ) {
-    saveDefaultServerUrl(config.defaultOverlaysServer);
-    modified = true;
-  }
-  if (modified) {
     window.location.reload();
   }
 }
@@ -327,16 +313,6 @@ export function loadStyleUrl(defaultStyleUrl: string): string {
 
 function saveStyleUrl(url: string): void {
   writeValue(STYLE_URL_STORAGE_KEY, url);
-}
-
-// Base URL suggested by config.json for a fresh install, used to prefill
-// the first server a user adds. Not tied to any particular connection.
-function loadDefaultServerUrl(defaultBaseUrl = ''): string {
-  return readValue(DEFAULT_SERVER_URL_STORAGE_KEY, defaultBaseUrl);
-}
-
-function saveDefaultServerUrl(url: string): void {
-  writeValue(DEFAULT_SERVER_URL_STORAGE_KEY, url);
 }
 
 function isMapPosition(value: unknown): value is MapPosition {

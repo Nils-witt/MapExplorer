@@ -17,9 +17,11 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import Alert from '@mui/material/Alert';
 import { SearchButtonControl } from './mapControls/SearchButtonControl';
 import { SettingsButtonControl } from './mapControls/SettingsButtonControl';
+import { UnitMarkers } from './UnitMarkers';
 import { useAuth } from '../context/AuthContext';
 import { useConnectedServers } from '../context/ConnectedServersContext';
 import { useOverlays } from '../context/OverlaysContext';
+import { loadAppConfig } from '../lib/config';
 
 import {
   applyConfig,
@@ -82,18 +84,11 @@ export function MapView() {
   } | null>(null);
 
   useEffect(() => {
-    try {
-      fetch('/config.json')
-        .then((response) => response.json())
-        .then((config) => {
-          applyConfig(config);
-        })
-        .catch((error) => {
-          console.log('Failed to load config.json:', error);
-        });
-    } catch (error) {
-      console.log('Failed to load config.json:', error);
-    }
+    loadAppConfig()
+      .then(applyConfig)
+      .catch((error) => {
+        console.log('Failed to load config.json:', error);
+      });
   }, []);
 
   // Layers are only stacked in render order when first added, so move them
@@ -199,6 +194,7 @@ export function MapView() {
             />
           </Source>
         ))}
+        <UnitMarkers />
       </Map>
 
       {mapActionError ? (
