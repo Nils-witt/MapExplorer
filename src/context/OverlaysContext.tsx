@@ -13,7 +13,7 @@ import {
   type OverlayMap,
   OverlayServer,
 } from '../api/OverlayServer.ts';
-import type { ConnectedServer } from '../types.ts';
+import { type ConnectedServer, isServerEnabled } from '../types.ts';
 import { useAuth } from './AuthContext.tsx';
 import {
   loadAvailableOverlays,
@@ -64,8 +64,14 @@ export type GeoObjectsByServer = Record<
 const OverlaysContext = createContext<OverlaysContextValue | null>(null);
 
 export function OverlaysProvider({ children }: { children: ReactNode }) {
-  const { overlayServers } = useConnectedServers();
+  const { overlayServers: allOverlayServers } = useConnectedServers();
   const { accessToken } = useAuth();
+  // Only these are fetched from and drawn. Disabled servers keep their
+  // cached overlays and geo objects for when they're enabled again.
+  const overlayServers = useMemo(
+    () => allOverlayServers.filter(isServerEnabled),
+    [allOverlayServers],
+  );
 
   const [overlays, setOverlays] = useState<Record<string, OverlayMap[]>>({});
   const [enabledOverlayIds, setEnabledOverlayIds] = useState<string[]>([]);
@@ -153,11 +159,12 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       if (controller.signal.aborted) {
         return;
       }
-      // Servers that couldn't be reached keep their last known overlays and
-      // geo objects; servers no longer configured are dropped.
+      // Servers that couldn't be reached or are disabled keep their last
+      // known overlays and geo objects; servers no longer configured are
+      // dropped.
       setOverlays((prev) => {
         const next: Record<string, OverlayMap[]> = {};
-        for (const server of overlayServers) {
+        for (const server of allOverlayServers) {
           const list = fetched[server.id] ?? prev[server.id];
           if (list) {
             next[server.id] = list;
@@ -167,7 +174,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       });
       setGeoObjects((prev) => {
         const next: GeoObjectsByServer = {};
-        for (const server of overlayServers) {
+        for (const server of allOverlayServers) {
           const maps = fetched[server.id];
           if (!maps) {
             if (prev[server.id]) {
@@ -199,7 +206,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     return () => {
       controller.abort();
     };
-  }, [overlayServers, accessToken]);
+  }, [allOverlayServers, overlayServers, accessToken]);
 
   useEffect(() => {
     console.log('Overlays updated:', overlays);
@@ -350,9 +357,29 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     [enabledSources, getOverlayOpacity],
   );
 
+  // What's cached for disabled servers isn't passed on.
+  const activeOverlays = useMemo(
+    () =>
+      Object.fromEntries(
+        overlayServers
+          .filter((server) => overlays[server.id])
+          .map((server) => [server.id, overlays[server.id]]),
+      ),
+    [overlayServers, overlays],
+  );
+  const activeGeoObjects = useMemo(
+    () =>
+      Object.fromEntries(
+        overlayServers
+          .filter((server) => geoObjects[server.id])
+          .map((server) => [server.id, geoObjects[server.id]]),
+      ),
+    [overlayServers, geoObjects],
+  );
+
   const value = useMemo(
     () => ({
-      overlays,
+      overlays: activeOverlays,
       enabledOverlayIds,
       setOverlayEnabled,
       moveOverlay,
@@ -361,10 +388,10 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       getOverlayVersion,
       setOverlayVersion,
       enabledOverlays,
-      geoObjects,
+      geoObjects: activeGeoObjects,
     }),
     [
-      overlays,
+      activeOverlays,
       enabledOverlayIds,
       setOverlayEnabled,
       moveOverlay,
@@ -373,7 +400,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       getOverlayVersion,
       setOverlayVersion,
       enabledOverlays,
-      geoObjects,
+      activeGeoObjects,
     ],
   );
 

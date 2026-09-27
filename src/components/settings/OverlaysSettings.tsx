@@ -22,6 +22,7 @@ import { useConnectedServers } from '../../context/ConnectedServersContext.tsx';
 import { useOverlays } from '../../context/OverlaysContext.tsx';
 import OverlayCacheButton from './OverlayCacheButton.tsx';
 import { deleteAllCaches, isTileCacheSupported } from '../../lib/tileCache.ts';
+import { isServerEnabled } from '../../types.ts';
 
 export default function OverlaysSettings() {
   const { overlayServers } = useConnectedServers();
@@ -100,7 +101,7 @@ export default function OverlaysSettings() {
           </Paper>
         </Stack>
       )}
-      {overlayServers.map((server) => {
+      {overlayServers.filter(isServerEnabled).map((server) => {
         const serverOverlays = overlays[server.id] ?? [];
         return (
           <Stack key={server.id} spacing={0.5}>

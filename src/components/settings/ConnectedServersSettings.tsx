@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
+import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import Stack from '@mui/material/Stack';
 import { useConnectedServers } from '../../context/ConnectedServersContext.tsx';
 import {
@@ -11,12 +11,31 @@ import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { CONFIGURED_UNIT_SERVER_ID } from '../../lib/config.ts';
+import {
+  CONFIGURED_OVERLAY_SERVER_ID,
+  CONFIGURED_UNIT_SERVER_ID,
+} from '../../lib/config.ts';
+import { type ConnectedServer, isServerEnabled } from '../../types.ts';
+
+// Sets whether one server of a list is enabled.
+function setEnabled(
+  setServers: Dispatch<SetStateAction<ConnectedServer[]>>,
+  serverId: string,
+  enabled: boolean,
+) {
+  setServers((prev) =>
+    prev.map((server) =>
+      server.id === serverId ? { ...server, enabled } : server,
+    ),
+  );
+}
 
 export default function ConnectedServersSettings() {
-  const { overlayServers, unitServers, setUnitServers } = useConnectedServers();
+  const { overlayServers, unitServers, setOverlayServers, setUnitServers } =
+    useConnectedServers();
   const { units, status } = useUnits();
 
   return (
@@ -24,14 +43,50 @@ export default function ConnectedServersSettings() {
       <Typography variant="overline" color="text.secondary">
         Overlay servers
       </Typography>
+      {overlayServers.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          No overlay servers yet. Add a tileserve-go server to use its maps as
+          overlays.
+        </Typography>
+      )}
       {overlayServers.map((server) => (
         <Paper key={server.id} sx={{ p: 2 }}>
-          <Typography variant="h6">{server.name}</Typography>
-          <Typography variant="subtitle1" sx={{ wordBreak: 'break-all' }}>
-            {server.baseUrl}
-          </Typography>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+            <Stack sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Typography variant="h6">{server.name}</Typography>
+              <Typography variant="subtitle1" sx={{ wordBreak: 'break-all' }}>
+                {server.baseUrl}
+              </Typography>
+            </Stack>
+            <EnableServerSwitch
+              server={server}
+              onChange={(enabled) =>
+                setEnabled(setOverlayServers, server.id, enabled)
+              }
+            />
+            <RemoveServerButton
+              server={server}
+              configuredId={CONFIGURED_OVERLAY_SERVER_ID}
+              onRemove={() =>
+                setOverlayServers((prev) =>
+                  prev.filter((other) => other.id !== server.id),
+                )
+              }
+            />
+          </Stack>
         </Paper>
       ))}
+      <AddServerForm
+        title="Add overlay server"
+        placeholder="https://tiles.example.com"
+        helperText="The server must allow this app in its CORS settings."
+        onAdd={(name, baseUrl) =>
+          setOverlayServers((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), name, baseUrl },
+          ])
+        }
+      />
 
       <Typography variant="overline" color="text.secondary">
         Unit servers
@@ -61,27 +116,28 @@ export default function ConnectedServersSettings() {
                 </Typography>
               </Stack>
             </Stack>
-            <IconButton
-              aria-label={`Remove ${server.name}`}
-              // It would come back with the next start.
-              disabled={server.id === CONFIGURED_UNIT_SERVER_ID}
-              title={
-                server.id === CONFIGURED_UNIT_SERVER_ID
-                  ? 'Set by the app configuration'
-                  : undefined
+            <EnableServerSwitch
+              server={server}
+              onChange={(enabled) =>
+                setEnabled(setUnitServers, server.id, enabled)
               }
-              onClick={() =>
+            />
+            <RemoveServerButton
+              server={server}
+              configuredId={CONFIGURED_UNIT_SERVER_ID}
+              onRemove={() =>
                 setUnitServers((prev) =>
                   prev.filter((other) => other.id !== server.id),
                 )
               }
-            >
-              <DeleteIcon />
-            </IconButton>
+            />
           </Stack>
         </Paper>
       ))}
-      <AddUnitServerForm
+      <AddServerForm
+        title="Add unit server"
+        placeholder="https://units.example.com"
+        helperText="The server must allow this app in CORS_ALLOWED_ORIGINS and accept its sign-in tokens."
         onAdd={(name, baseUrl) =>
           setUnitServers((prev) => [
             ...prev,
@@ -114,6 +170,8 @@ function StatusChip({ status }: { status: UnitServerStatus | undefined }) {
           title="Retrying automatically"
         />
       );
+    case 'disabled':
+      return <Chip size="small" label="Disabled" />;
     case 'signedOut':
       return <Chip size="small" label="Sign in to connect" />;
     default:
@@ -121,9 +179,60 @@ function StatusChip({ status }: { status: UnitServerStatus | undefined }) {
   }
 }
 
-function AddUnitServerForm({
+function EnableServerSwitch({
+  server,
+  onChange,
+}: {
+  server: ConnectedServer;
+  onChange: (enabled: boolean) => void;
+}) {
+  const enabled = isServerEnabled(server);
+  return (
+    <Switch
+      checked={enabled}
+      onChange={(event) => onChange(event.target.checked)}
+      slotProps={{
+        input: {
+          'aria-label': `${enabled ? 'Disable' : 'Enable'} ${server.name}`,
+        },
+      }}
+    />
+  );
+}
+
+function RemoveServerButton({
+  server,
+  configuredId,
+  onRemove,
+}: {
+  server: ConnectedServer;
+  // Id of the server the app configuration sets for this list.
+  configuredId: string;
+  onRemove: () => void;
+}) {
+  // The configured server would come back with the next start.
+  const configured = server.id === configuredId;
+  return (
+    <IconButton
+      aria-label={`Remove ${server.name}`}
+      disabled={configured}
+      title={configured ? 'Set by the app configuration' : undefined}
+      onClick={onRemove}
+    >
+      <DeleteIcon />
+    </IconButton>
+  );
+}
+
+function AddServerForm({
+  title,
+  placeholder,
+  helperText,
   onAdd,
 }: {
+  title: string;
+  placeholder: string;
+  helperText: string;
   onAdd: (name: string, baseUrl: string) => void;
 }) {
   const [name, setName] = useState('');
@@ -136,7 +245,7 @@ function AddUnitServerForm({
     try {
       url = new URL(baseUrl.trim());
     } catch {
-      setError('Enter a URL like https://units.example.com');
+      setError(`Enter a URL like ${placeholder}`);
       return;
     }
     if (url.protocol !== 'https:' && url.protocol !== 'http:') {
@@ -153,18 +262,15 @@ function AddUnitServerForm({
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack component="form" spacing={1.5} onSubmit={handleSubmit}>
-        <Typography variant="subtitle2">Add unit server</Typography>
+        <Typography variant="subtitle2">{title}</Typography>
         <TextField
           size="small"
           label="Base URL"
-          placeholder="https://units.example.com"
+          placeholder={placeholder}
           value={baseUrl}
           onChange={(event) => setBaseUrl(event.target.value)}
           error={error !== null}
-          helperText={
-            error ??
-            'The server must allow this app in CORS_ALLOWED_ORIGINS and accept its sign-in tokens.'
-          }
+          helperText={error ?? helperText}
           required
         />
         <TextField

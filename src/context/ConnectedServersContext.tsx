@@ -17,7 +17,8 @@ import {
 // Brings the server the deployment configures (see loadConfiguredServers)
 // into a list: added or updated from the config, or dropped once the config
 // no longer names one. `configured` is undefined when the config couldn't be
-// loaded, which leaves the list as it is.
+// loaded, which leaves the list as it is. Whether the user disabled it is
+// kept.
 function withConfiguredServer(
   servers: ConnectedServer[],
   id: string,
@@ -31,7 +32,9 @@ function withConfiguredServer(
     return others;
   }
   return servers.some((server) => server.id === id)
-    ? servers.map((server) => (server.id === id ? configured : server))
+    ? servers.map((server) =>
+        server.id === id ? { ...configured, enabled: server.enabled } : server,
+      )
     : [configured, ...others];
 }
 

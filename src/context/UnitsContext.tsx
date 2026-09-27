@@ -13,7 +13,7 @@ import {
   UNIT_EVENTS_SESSION_ENDED,
   UnitServer,
 } from '../api/UnitServer';
-import type { ConnectedServer } from '../types';
+import { type ConnectedServer, isServerEnabled } from '../types';
 import { useAuth } from './AuthContext';
 import { useConnectedServers } from './ConnectedServersContext';
 
@@ -23,7 +23,8 @@ export type UnitServerStatus =
   | { state: 'live' }
   // Waiting to reconnect; `error` says why the last attempt ended.
   | { state: 'offline'; error: string }
-  | { state: 'signedOut' };
+  | { state: 'signedOut' }
+  | { state: 'disabled' };
 
 // A unit together with the server it came from.
 export interface ServerUnit {
@@ -49,6 +50,10 @@ const RECONNECT_MAX_MS = 30_000;
 
 export function UnitsProvider({ children }: { children: ReactNode }) {
   const { unitServers } = useConnectedServers();
+  const enabledServers = useMemo(
+    () => unitServers.filter(isServerEnabled),
+    [unitServers],
+  );
   const { accessToken, isAuthenticated } = useAuth();
 
   const [units, setUnits] = useState<Record<string, Record<string, Unit>>>({});
@@ -65,7 +70,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       return;
     }
-    const stops = unitServers.map((server) =>
+    const stops = enabledServers.map((server) =>
       followServer(
         server,
         () => tokenRef.current,
@@ -79,14 +84,18 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
       ),
     );
     return () => stops.forEach((stop) => stop());
-  }, [unitServers, isAuthenticated]);
+  }, [enabledServers, isAuthenticated]);
 
-  // State can still hold removed servers, or units from before signing out;
-  // only what's current is passed on.
+  // State can still hold removed or disabled servers, or units from before
+  // signing out; only what's current is passed on.
   const value = useMemo<UnitsContextValue>(() => {
     const current: Record<string, Record<string, Unit>> = {};
     const currentStatus: Record<string, UnitServerStatus> = {};
     for (const server of unitServers) {
+      if (!isServerEnabled(server)) {
+        currentStatus[server.id] = { state: 'disabled' };
+        continue;
+      }
       if (!isAuthenticated) {
         currentStatus[server.id] = { state: 'signedOut' };
         continue;
