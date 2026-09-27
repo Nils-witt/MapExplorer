@@ -1,4 +1,5 @@
 import type { IControl, Map as MapLibreMap } from 'maplibre-gl';
+import './SearchControl.scss';
 
 export interface SearchableGeoObject {
   uuid: string;

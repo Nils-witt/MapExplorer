@@ -1,0 +1,50 @@
+.unit-marker {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+  flex-direction: column;
+
+  .labelbox {
+    position: relative;
+    background-color: white;
+    border: 1px solid black;
+
+    &::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      border-style: solid;
+      border-width: 0 0 8px 8px;
+      border-color: transparent transparent black transparent;
+      pointer-events: none;
+    }
+  }
+
+  &__symbol {
+    height: 50px;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  }
+
+  &__label {
+    margin-top: 1px;
+    white-space: nowrap;
+    color: #222;
+    font: 600 11px/1.2 sans-serif;
+    text-shadow:
+      0 0 2px #fff,
+      0 0 2px #fff,
+      0 0 3px #fff;
+    pointer-events: none;
+  }
+}
+
+.unit-popup {
+  font-family: sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+
+  &__time {
+    color: #666;
+  }
+}

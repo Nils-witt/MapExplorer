@@ -4,6 +4,7 @@ import { Marker, Popup } from '@vis.gl/react-maplibre';
 import type { Unit, UnitPosition } from '../api/UnitServer';
 import { useUnits } from '../context/UnitsContext';
 import { formatTacticalName, symbolDataUrl } from '../lib/unitSymbol';
+import './UnitMarkers.scss';
 
 // Draws every unit with a position from the connected unit servers, as its
 // tactical symbol (or a dot without one), with a popup on click.

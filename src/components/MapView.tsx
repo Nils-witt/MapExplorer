@@ -14,6 +14,7 @@ import {
 import type { RequestParameters, ResourceType } from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import './MapView.scss';
 import Alert from '@mui/material/Alert';
 import { FullscreenButtonControl } from './mapControls/FullscreenButtonControl';
 import { SearchButtonControl } from './mapControls/SearchButtonControl';

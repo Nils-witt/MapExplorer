@@ -1,4 +1,5 @@
 import type { IControl, Map as MapLibreMap } from 'maplibre-gl';
+import './SettingsControl.scss';
 
 const SETTINGS_ICON_SVG =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">' +
