@@ -1,5 +1,5 @@
 {
-  "defaultStyleUrl": "",
+  "mapStyles": [{ "name": "", "url": "" }],
   "defaultOverlaysServer": "",
   "defaultOverlaysServerName": "",
   "defaultUnitsServer": "",

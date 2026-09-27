@@ -1,9 +1,12 @@
 import type { OverlayGeoObject, OverlayMap } from '../api/OverlayServer';
+import type { AppConfig, MapStyle } from './config';
 import type { ConnectedServer, MapPosition } from '../types';
 
-// The deployment's default style (from config.json) and the user's own
-// choice from the settings, which takes precedence.
-const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
+// The deployment's styles (from config.json, the first being the default)
+// and the user's own choice from the settings, which takes precedence.
+const MAP_STYLES_STORAGE_KEY = 'mapexplorer.mapStyles';
+// Where the default style was kept before config.json had a list of them.
+const LEGACY_STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
 const CUSTOM_STYLE_URL_STORAGE_KEY = 'mapexplorer.customStyleUrl';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const ENABLED_OVERLAYS_STORAGE_KEY = 'mapexplorer.enabledOverlays';
@@ -303,23 +306,46 @@ export function saveGeoObjects(geoObjects: StoredGeoObjects): Promise<void> {
 }
 
 // The configured servers are applied by ConnectedServersProvider.
-export function applyConfig(config: { defaultStyleUrl?: string }): void {
-  if (
-    config.defaultStyleUrl &&
-    config.defaultStyleUrl !== readValue(STYLE_URL_STORAGE_KEY)
-  ) {
-    writeValue(STYLE_URL_STORAGE_KEY, config.defaultStyleUrl);
-    // Only visible when the user hasn't picked their own style.
-    if (!loadCustomStyleUrl()) {
-      window.location.reload();
-    }
+export function applyConfig(config: AppConfig): void {
+  const styles = (Array.isArray(config.mapStyles) ? config.mapStyles : [])
+    .filter((style) => style && typeof style.url === 'string' && style.url)
+    .map(({ name, url }) => ({ name: name || hostOf(url), url }));
+  const previousDefault = loadDefaultStyleUrl();
+  writeValue(
+    MAP_STYLES_STORAGE_KEY,
+    styles.length ? JSON.stringify(styles) : '',
+  );
+  writeValue(LEGACY_STYLE_URL_STORAGE_KEY, '');
+  // Only visible when the user hasn't picked their own style.
+  if (loadDefaultStyleUrl() !== previousDefault && !loadCustomStyleUrl()) {
+    window.location.reload();
   }
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+// The styles from the last loaded config.json, each with a name.
+export function loadMapStyles(): Required<MapStyle>[] {
+  try {
+    const parsed = JSON.parse(readValue(MAP_STYLES_STORAGE_KEY, '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadDefaultStyleUrl(): string {
+  return loadMapStyles()[0]?.url ?? readValue(LEGACY_STYLE_URL_STORAGE_KEY);
+}
+
 export function loadStyleUrl(defaultStyleUrl: string): string {
-  return (
-    loadCustomStyleUrl() || readValue(STYLE_URL_STORAGE_KEY, defaultStyleUrl)
-  );
+  return loadCustomStyleUrl() || loadDefaultStyleUrl() || defaultStyleUrl;
 }
 
 export function loadCustomStyleUrl(): string {

@@ -1,9 +1,16 @@
 import type { ConnectedServer } from '../types';
 
+// A basemap the deployment offers; the name defaults to the host.
+export interface MapStyle {
+  name?: string;
+  url: string;
+}
+
 // The deployment's /config.json (see config.example.json). The service
 // worker keeps the last copy, so it also loads offline.
 export interface AppConfig {
-  defaultStyleUrl?: string;
+  // The basemaps users can pick from; the first one is the default.
+  mapStyles?: MapStyle[];
   oidcIssuer?: string;
   oidcClientId?: string;
   // Overlay server (tileserve-go) and unit server (go-unit-mangement) every
