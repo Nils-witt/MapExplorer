@@ -27,6 +27,7 @@ import {
   applyConfig,
   loadMapPosition,
   loadStyleUrl,
+  saveCustomStyleUrl,
   saveMapPosition,
 } from '../lib/storage';
 
@@ -73,7 +74,9 @@ export function MapView() {
   // across close/reopen so its close transition still animates, while still
   // deferring the initial chunk load until first opened.
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [styleUrl] = useState(() => loadStyleUrl(DEFAULT_STYLE_URL));
+  const [styleUrl, setStyleUrl] = useState(() =>
+    loadStyleUrl(DEFAULT_STYLE_URL),
+  );
   const [initialPosition] = useState(
     () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
   );
@@ -106,6 +109,13 @@ export function MapView() {
       }
     }
   }, [overlayOrder]);
+
+  const handleApplyStyle = (url: string) => {
+    saveCustomStyleUrl(url);
+    const nextStyleUrl = loadStyleUrl(DEFAULT_STYLE_URL);
+    setStyleUrl(nextStyleUrl);
+    return nextStyleUrl;
+  };
 
   const handleMoveEnd = (event: ViewStateChangeEvent) => {
     const { longitude, latitude, zoom, bearing, pitch } = event.viewState;
@@ -218,6 +228,8 @@ export function MapView() {
           <SettingsDialog
             open={settingsOpen}
             onClose={() => setSettingsOpen(false)}
+            styleUrl={styleUrl}
+            onApplyStyle={handleApplyStyle}
           />
         </Suspense>
       ) : null}

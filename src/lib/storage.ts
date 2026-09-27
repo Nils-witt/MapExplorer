@@ -1,7 +1,10 @@
 import type { OverlayGeoObject, OverlayMap } from '../api/OverlayServer';
 import type { ConnectedServer, MapPosition } from '../types';
 
+// The deployment's default style (from config.json) and the user's own
+// choice from the settings, which takes precedence.
 const STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
+const CUSTOM_STYLE_URL_STORAGE_KEY = 'mapexplorer.customStyleUrl';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const ENABLED_OVERLAYS_STORAGE_KEY = 'mapexplorer.enabledOverlays';
 const OVERLAY_OPACITIES_STORAGE_KEY = 'mapexplorer.overlayOpacities';
@@ -301,18 +304,31 @@ export function saveGeoObjects(geoObjects: StoredGeoObjects): Promise<void> {
 
 // The configured servers are applied by ConnectedServersProvider.
 export function applyConfig(config: { defaultStyleUrl?: string }): void {
-  if (config.defaultStyleUrl && config.defaultStyleUrl !== loadStyleUrl('')) {
-    saveStyleUrl(config.defaultStyleUrl);
-    window.location.reload();
+  if (
+    config.defaultStyleUrl &&
+    config.defaultStyleUrl !== readValue(STYLE_URL_STORAGE_KEY)
+  ) {
+    writeValue(STYLE_URL_STORAGE_KEY, config.defaultStyleUrl);
+    // Only visible when the user hasn't picked their own style.
+    if (!loadCustomStyleUrl()) {
+      window.location.reload();
+    }
   }
 }
 
 export function loadStyleUrl(defaultStyleUrl: string): string {
-  return readValue(STYLE_URL_STORAGE_KEY, defaultStyleUrl);
+  return (
+    loadCustomStyleUrl() || readValue(STYLE_URL_STORAGE_KEY, defaultStyleUrl)
+  );
 }
 
-function saveStyleUrl(url: string): void {
-  writeValue(STYLE_URL_STORAGE_KEY, url);
+export function loadCustomStyleUrl(): string {
+  return readValue(CUSTOM_STYLE_URL_STORAGE_KEY);
+}
+
+// An empty url goes back to the default style.
+export function saveCustomStyleUrl(url: string): void {
+  writeValue(CUSTOM_STYLE_URL_STORAGE_KEY, url);
 }
 
 function isMapPosition(value: unknown): value is MapPosition {

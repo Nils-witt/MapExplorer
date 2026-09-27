@@ -27,7 +27,9 @@ export default function ConnectedServersSettings() {
       {overlayServers.map((server) => (
         <Paper key={server.id} sx={{ p: 2 }}>
           <Typography variant="h6">{server.name}</Typography>
-          <Typography variant="subtitle1">{server.baseUrl}</Typography>
+          <Typography variant="subtitle1" sx={{ wordBreak: 'break-all' }}>
+            {server.baseUrl}
+          </Typography>
         </Paper>
       ))}
 

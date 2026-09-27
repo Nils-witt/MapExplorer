@@ -131,6 +131,8 @@ export default function OverlaysSettings() {
                       <ListItem
                         key={overlay.uuid}
                         divider={index < serverOverlays.length - 1}
+                        // On phones the controls wrap below the name.
+                        sx={{ flexWrap: { xs: 'wrap', sm: 'nowrap' } }}
                         secondaryAction={
                           <Switch
                             edge="end"
@@ -159,6 +161,7 @@ export default function OverlaysSettings() {
                             .filter(Boolean)
                             .join(' · ')}
                           slotProps={{ secondary: { noWrap: true } }}
+                          sx={{ flexBasis: { xs: '100%', sm: 'auto' } }}
                         />
                         {enabled && (
                           <Select
@@ -171,7 +174,7 @@ export default function OverlaysSettings() {
                             inputProps={{
                               'aria-label': `${overlay.name} version`,
                             }}
-                            sx={{ flexShrink: 0, ml: 2 }}
+                            sx={{ flexShrink: 0, ml: { xs: 0, sm: 2 } }}
                           >
                             {versionOptions.map((option) => (
                               <MenuItem key={option} value={option}>
@@ -197,7 +200,12 @@ export default function OverlaysSettings() {
                               `${Math.round(value * 100)}%`
                             }
                             aria-label={`${overlay.name} opacity`}
-                            sx={{ width: 120, flexShrink: 0, mx: 2 }}
+                            sx={{
+                              width: { xs: 'auto', sm: 120 },
+                              flexGrow: { xs: 1, sm: 0 },
+                              flexShrink: 0,
+                              mx: 2,
+                            }}
                           />
                         )}
                         <OverlayCacheButton

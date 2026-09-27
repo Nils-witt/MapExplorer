@@ -5,9 +5,14 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Stack from '@mui/material/Stack';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import UserSettingsComponent from './UserSettingsComponent';
+import MapSettingsComponent from './MapSettingsComponent';
 import ConnectedServersSettings from './settings/ConnectedServersSettings.tsx';
 import OverlaysSettings from './settings/OverlaysSettings.tsx';
 import ServiceWorkerSettings from './settings/ServiceWorkerSettings.tsx';
@@ -15,56 +20,94 @@ import ServiceWorkerSettings from './settings/ServiceWorkerSettings.tsx';
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
+  styleUrl: string;
+  onApplyStyle: (url: string) => string;
 }
 
-export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
-  type OpenTabs = 'user' | 'connectedServers' | 'overlays' | 'offline';
+type OpenTabs = 'user' | 'map' | 'connectedServers' | 'overlays' | 'offline';
 
+const TABS: { value: OpenTabs; label: string }[] = [
+  { value: 'user', label: 'User' },
+  { value: 'map', label: 'Basemap' },
+  { value: 'connectedServers', label: 'Connected Servers' },
+  { value: 'overlays', label: 'Overlays' },
+  { value: 'offline', label: 'Offline & Cache' },
+];
+
+export function SettingsDialog({
+  open,
+  onClose,
+  styleUrl,
+  onApplyStyle,
+}: SettingsDialogProps) {
   const [openTabs, setOpenTabs] = useState<OpenTabs>('user');
+  // On phones the dialog fills the screen and the tabs run along the top.
+  const isSmallScreen = useMediaQuery(useTheme().breakpoints.down('sm'));
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Map settings</DialogTitle>
-      <DialogContent>
-        <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
-          <Stack spacing={1} sx={{ minWidth: 200, flexShrink: 0 }}>
-            <Button
-              variant={openTabs === 'user' ? 'contained' : 'outlined'}
-              onClick={() => setOpenTabs('user')}
-            >
-              User
-            </Button>
-            <Button
-              variant={
-                openTabs === 'connectedServers' ? 'contained' : 'outlined'
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="md"
+      fullScreen={isSmallScreen}
+      slotProps={{
+        paper: {
+          // Keep clear of the notch and home indicator in the fullscreen PWA.
+          sx: isSmallScreen
+            ? {
+                pt: 'env(safe-area-inset-top)',
+                pb: 'env(safe-area-inset-bottom)',
+                pl: 'env(safe-area-inset-left)',
+                pr: 'env(safe-area-inset-right)',
               }
-              onClick={() => setOpenTabs('connectedServers')}
-            >
-              Connected Servers
-            </Button>
-            <Button
-              variant={openTabs === 'overlays' ? 'contained' : 'outlined'}
-              onClick={() => setOpenTabs('overlays')}
-            >
-              Overlays
-            </Button>
-            <Button
-              variant={openTabs === 'offline' ? 'contained' : 'outlined'}
-              onClick={() => setOpenTabs('offline')}
-            >
-              Offline &amp; Cache
-            </Button>
-          </Stack>
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Stack sx={{ pt: 1 }}>
-              {openTabs === 'connectedServers' && <ConnectedServersSettings />}
-              {openTabs === 'user' && <UserSettingsComponent />}
-              {openTabs === 'overlays' && <OverlaysSettings />}
-              {openTabs === 'offline' && <ServiceWorkerSettings />}
-            </Stack>
+            : undefined,
+        },
+      }}
+    >
+      <DialogTitle>Map settings</DialogTitle>
+      <Stack
+        direction={isSmallScreen ? 'column' : 'row'}
+        sx={{ flexGrow: 1, minHeight: 0 }}
+      >
+        <Tabs
+          orientation={isSmallScreen ? 'horizontal' : 'vertical'}
+          variant="scrollable"
+          scrollButtons={false}
+          value={openTabs}
+          onChange={(_event, value: OpenTabs) => setOpenTabs(value)}
+          sx={{
+            flexShrink: 0,
+            borderColor: 'divider',
+            ...(isSmallScreen
+              ? { borderBottom: 1 }
+              : { borderRight: 1, minWidth: 200 }),
+          }}
+        >
+          {TABS.map(({ value, label }) => (
+            <Tab
+              key={value}
+              value={value}
+              label={label}
+              sx={isSmallScreen ? undefined : { alignItems: 'flex-start' }}
+            />
+          ))}
+        </Tabs>
+        <DialogContent sx={{ minWidth: 0 }}>
+          <Box sx={{ pt: 1 }}>
+            {openTabs === 'connectedServers' && <ConnectedServersSettings />}
+            {openTabs === 'user' && <UserSettingsComponent />}
+            {openTabs === 'map' && (
+              <MapSettingsComponent
+                styleUrl={styleUrl}
+                onApplyStyle={onApplyStyle}
+              />
+            )}
+            {openTabs === 'overlays' && <OverlaysSettings />}
+            {openTabs === 'offline' && <ServiceWorkerSettings />}
           </Box>
-        </Stack>
-      </DialogContent>
+        </DialogContent>
+      </Stack>
       <DialogActions sx={{ justifyContent: 'space-between' }}>
         <Typography variant="caption" color="text.secondary">
           {[
