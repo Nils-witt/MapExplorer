@@ -25,6 +25,7 @@ import {
   listCaches,
   parseOverlayCacheName,
 } from '../../lib/tileCache.ts';
+import { deleteDatabase } from '../../lib/storage.ts';
 
 const isServiceWorkerSupported = () => 'serviceWorker' in navigator;
 
@@ -48,7 +49,28 @@ interface StorageInfo {
   persisted: boolean;
 }
 
-type Confirm = 'unregister' | 'deleteAll';
+type Confirm = 'unregister' | 'deleteAll' | 'resetAll';
+
+const confirmText: Record<
+  Confirm,
+  { title: string; text: string; action: string }
+> = {
+  unregister: {
+    title: 'Unregister the service worker?',
+    text: 'The app reloads and installs the service worker afresh. Cached data is kept.',
+    action: 'Unregister',
+  },
+  deleteAll: {
+    title: 'Delete all caches?',
+    text: 'Every overlay cached for offline use and all map tiles and styles cached while browsing will be deleted. They are downloaded again when next needed, which requires a connection.',
+    action: 'Delete',
+  },
+  resetAll: {
+    title: 'Delete all local data?',
+    text: 'All caches, saved servers, settings and your login session will be deleted and the service worker unregistered. The app then reloads, and you will have to sign in and set it up again. This requires a connection.',
+    action: 'Delete everything',
+  },
+};
 
 export default function ServiceWorkerSettings() {
   const { overlays } = useOverlays();
@@ -201,6 +223,26 @@ export default function ServiceWorkerSettings() {
       const count = await deleteAllCaches();
       return `Deleted ${count} cache${count === 1 ? '' : 's'}.`;
     }, 'Failed to delete caches.');
+
+  // Wipes everything the app stores in this browser, including the login
+  // session, and reloads so the app starts from scratch.
+  const handleResetAll = () =>
+    run(async () => {
+      localStorage.clear();
+      sessionStorage.clear();
+      const tasks: Promise<unknown>[] = [deleteDatabase()];
+      if (isTileCacheSupported()) {
+        const names = await caches.keys();
+        tasks.push(...names.map((name) => caches.delete(name)));
+      }
+      if (isServiceWorkerSupported()) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        tasks.push(...registrations.map((reg) => reg.unregister()));
+      }
+      await Promise.all(tasks);
+      window.location.reload();
+      return null;
+    }, 'Failed to delete all local data.');
 
   const handleRequestPersistence = () =>
     run(async () => {
@@ -437,20 +479,23 @@ export default function ServiceWorkerSettings() {
             Delete all caches
           </Button>
         )}
+        <Button
+          color="error"
+          variant="contained"
+          disabled={busy}
+          onClick={() => {
+            setConfirm('resetAll');
+            setConfirmOpen(true);
+          }}
+        >
+          Delete all local data
+        </Button>
       </Stack>
 
       <Dialog open={confirmOpen} onClose={() => !busy && setConfirmOpen(false)}>
-        <DialogTitle>
-          {confirm === 'unregister'
-            ? 'Unregister the service worker?'
-            : 'Delete all caches?'}
-        </DialogTitle>
+        <DialogTitle>{confirmText[confirm].title}</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            {confirm === 'unregister'
-              ? 'The app reloads and installs the service worker afresh. Cached data is kept.'
-              : 'Every overlay cached for offline use and all map tiles and styles cached while browsing will be deleted. They are downloaded again when next needed, which requires a connection.'}
-          </DialogContentText>
+          <DialogContentText>{confirmText[confirm].text}</DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmOpen(false)} disabled={busy}>
@@ -462,10 +507,12 @@ export default function ServiceWorkerSettings() {
             onClick={() =>
               void (confirm === 'unregister'
                 ? handleUnregister()
-                : handleDeleteAll())
+                : confirm === 'resetAll'
+                  ? handleResetAll()
+                  : handleDeleteAll())
             }
           >
-            {confirm === 'unregister' ? 'Unregister' : 'Delete'}
+            {confirmText[confirm].action}
           </Button>
         </DialogActions>
       </Dialog>

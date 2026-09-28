@@ -489,3 +489,18 @@ export function saveUnitSymbolSize(size: number): void {
     size === DEFAULT_UNIT_SYMBOL_SIZE ? '' : String(size),
   );
 }
+
+// Deletes the whole IndexedDB database. Open connections block the deletion
+// until they close (e.g. on reload), so a blocked request counts as done.
+export function deleteDatabase(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      resolve();
+      return;
+    }
+    const request = indexedDB.deleteDatabase(IDB_DATABASE_NAME);
+    request.onsuccess = () => resolve();
+    request.onblocked = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
