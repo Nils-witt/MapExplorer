@@ -12,7 +12,7 @@ npm run format        # prettier --write . (single quotes, semicolons, trailing 
 npm run format:check
 ```
 
-There is no test suite. CI (`.github/workflows/npm-build.yml`) runs `lint`, `format:check` and `build`, so run all three before you finish. A husky pre-commit hook runs lint-staged, which runs oxlint and prettier on staged files.
+There is no test suite. CI (`.github/workflows/npm-build.yml`) runs `lint`, `format:check` and `build`, so run all three before you finish. The same workflow builds and pushes the Docker image to GHCR once those pass, on pushes to `main` and `v*` tags. A husky pre-commit hook runs lint-staged, which runs oxlint and prettier on staged files.
 
 The TypeScript config is strict about unused code (`noUnusedLocals`, `noUnusedParameters`) and uses `verbatimModuleSyntax` and `erasableSyntaxOnly`. So use `import type` for type-only imports, and don't use enums, namespaces or parameter properties.
 
