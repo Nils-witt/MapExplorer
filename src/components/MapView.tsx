@@ -18,6 +18,7 @@ import './MapView.scss';
 import Alert from '@mui/material/Alert';
 import { FullscreenButtonControl } from './mapControls/FullscreenButtonControl';
 import { SearchButtonControl } from './mapControls/SearchButtonControl';
+import { SearchDialog } from './SearchDialog';
 import { SettingsButtonControl } from './mapControls/SettingsButtonControl';
 import { UnitMarkers } from './UnitMarkers';
 import { useAuth } from '../context/AuthContext';
@@ -95,6 +96,7 @@ export function MapView() {
   // across close/reopen so its close transition still animates, while still
   // deferring the initial chunk load until first opened.
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [styleUrl, setStyleUrl] = useState(() =>
     loadStyleUrl(DEFAULT_STYLE_URL),
   );
@@ -196,7 +198,7 @@ export function MapView() {
           />
         )}
         <NavigationControl position="top-left" />
-        <SearchButtonControl onSelect={handleLocateMarker} />
+        <SearchButtonControl onOpen={() => setSearchOpen(true)} />
         <GeolocateControl
           position="top-left"
           positionOptions={{ enableHighAccuracy: true }}
@@ -283,6 +285,11 @@ export function MapView() {
         </Alert>
       ) : null}
       <div className="copyright">© 2026 Nils Witt</div>
+      <SearchDialog
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelect={handleLocateMarker}
+      />
       {settingsLoaded ? (
         <Suspense fallback={null}>
           <SettingsDialog
