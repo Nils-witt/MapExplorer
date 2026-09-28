@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -36,6 +37,9 @@ export default function OverlaysSettings() {
     setOverlayOpacity,
     getOverlayVersion,
     setOverlayVersion,
+    getOverlayLayers,
+    isLayerVisible,
+    setLayerVisible,
   } = useOverlays();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -128,94 +132,144 @@ export default function OverlaysSettings() {
                           overlay.currentVersion,
                           ...overlay.versions.map((v) => v.version),
                         ];
+                    const layers = enabled
+                      ? getOverlayLayers(server.id, overlay)
+                      : [];
+                    const isLast = index === serverOverlays.length - 1;
                     return (
-                      <ListItem
-                        key={overlay.uuid}
-                        divider={index < serverOverlays.length - 1}
-                        // On phones the controls wrap below the name.
-                        sx={{ flexWrap: { xs: 'wrap', sm: 'nowrap' } }}
-                        secondaryAction={
-                          <Switch
-                            edge="end"
-                            size="small"
-                            checked={enabled}
-                            onChange={(event) =>
-                              setOverlayEnabled(
-                                overlay.uuid,
-                                event.target.checked,
-                              )
-                            }
-                            slotProps={{
-                              input: { 'aria-label': `Show ${overlay.name}` },
-                            }}
+                      <Fragment key={overlay.uuid}>
+                        <ListItem
+                          divider={!isLast && layers.length === 0}
+                          // On phones the controls wrap below the name.
+                          sx={{ flexWrap: { xs: 'wrap', sm: 'nowrap' } }}
+                          secondaryAction={
+                            <Switch
+                              edge="end"
+                              size="small"
+                              checked={enabled}
+                              onChange={(event) =>
+                                setOverlayEnabled(
+                                  overlay.uuid,
+                                  event.target.checked,
+                                )
+                              }
+                              slotProps={{
+                                input: { 'aria-label': `Show ${overlay.name}` },
+                              }}
+                            />
+                          }
+                        >
+                          <ListItemText
+                            primary={overlay.name}
+                            secondary={[
+                              `v${version}`,
+                              overlay.syncRemoteName &&
+                                `Mirrored from ${overlay.syncRemoteName}`,
+                              overlay.description,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                            slotProps={{ secondary: { noWrap: true } }}
+                            sx={{ flexBasis: { xs: '100%', sm: 'auto' } }}
                           />
-                        }
-                      >
-                        <ListItemText
-                          primary={overlay.name}
-                          secondary={[
-                            `v${version}`,
-                            overlay.syncRemoteName &&
-                              `Mirrored from ${overlay.syncRemoteName}`,
-                            overlay.description,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                          slotProps={{ secondary: { noWrap: true } }}
-                          sx={{ flexBasis: { xs: '100%', sm: 'auto' } }}
-                        />
-                        {enabled && (
-                          <Select
-                            size="small"
-                            variant="standard"
-                            value={version}
-                            onChange={(event) =>
-                              setOverlayVersion(overlay, event.target.value)
+                          {enabled && (
+                            <Select
+                              size="small"
+                              variant="standard"
+                              value={version}
+                              onChange={(event) =>
+                                setOverlayVersion(overlay, event.target.value)
+                              }
+                              inputProps={{
+                                'aria-label': `${overlay.name} version`,
+                              }}
+                              sx={{ flexShrink: 0, ml: { xs: 0, sm: 2 } }}
+                            >
+                              {versionOptions.map((option) => (
+                                <MenuItem key={option} value={option}>
+                                  v{option}
+                                  {option === overlay.currentVersion &&
+                                    ' (current)'}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          )}
+                          {enabled && (
+                            <Slider
+                              size="small"
+                              min={0}
+                              max={1}
+                              step={0.05}
+                              value={getOverlayOpacity(overlay.uuid)}
+                              onChange={(_event, value) =>
+                                setOverlayOpacity(overlay.uuid, value)
+                              }
+                              valueLabelDisplay="auto"
+                              valueLabelFormat={(value) =>
+                                `${Math.round(value * 100)}%`
+                              }
+                              aria-label={`${overlay.name} opacity`}
+                              sx={{
+                                width: { xs: 'auto', sm: 120 },
+                                flexGrow: { xs: 1, sm: 0 },
+                                flexShrink: 0,
+                                mx: 2,
+                              }}
+                            />
+                          )}
+                          <OverlayCacheButton
+                            key={cacheGeneration}
+                            server={server}
+                            overlay={overlay}
+                            version={version}
+                          />
+                        </ListItem>
+                        {layers.map((layer, layerIndex) => (
+                          <ListItem
+                            key={layer.name}
+                            divider={
+                              !isLast && layerIndex === layers.length - 1
                             }
-                            inputProps={{
-                              'aria-label': `${overlay.name} version`,
-                            }}
-                            sx={{ flexShrink: 0, ml: { xs: 0, sm: 2 } }}
+                            sx={{ pl: 4 }}
+                            secondaryAction={
+                              <Switch
+                                edge="end"
+                                size="small"
+                                checked={isLayerVisible(
+                                  overlay.uuid,
+                                  layer.name,
+                                )}
+                                onChange={(event) =>
+                                  setLayerVisible(
+                                    overlay.uuid,
+                                    layer.name,
+                                    event.target.checked,
+                                  )
+                                }
+                                slotProps={{
+                                  input: { 'aria-label': `Show ${layer.name}` },
+                                }}
+                              />
+                            }
                           >
-                            {versionOptions.map((option) => (
-                              <MenuItem key={option} value={option}>
-                                v{option}
-                                {option === overlay.currentVersion &&
-                                  ' (current)'}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        )}
-                        {enabled && (
-                          <Slider
-                            size="small"
-                            min={0}
-                            max={1}
-                            step={0.05}
-                            value={getOverlayOpacity(overlay.uuid)}
-                            onChange={(_event, value) =>
-                              setOverlayOpacity(overlay.uuid, value)
-                            }
-                            valueLabelDisplay="auto"
-                            valueLabelFormat={(value) =>
-                              `${Math.round(value * 100)}%`
-                            }
-                            aria-label={`${overlay.name} opacity`}
-                            sx={{
-                              width: { xs: 'auto', sm: 120 },
-                              flexGrow: { xs: 1, sm: 0 },
-                              flexShrink: 0,
-                              mx: 2,
-                            }}
-                          />
-                        )}
-                        <OverlayCacheButton
-                          key={cacheGeneration}
-                          server={server}
-                          overlay={overlay}
-                          version={version}
-                        />
-                      </ListItem>
+                            <Box
+                              aria-hidden
+                              sx={{
+                                width: 12,
+                                height: 12,
+                                borderRadius: '50%',
+                                bgcolor: layer.color,
+                                flexShrink: 0,
+                                mr: 1.5,
+                              }}
+                            />
+                            <ListItemText
+                              primary={layer.name}
+                              slotProps={{ primary: { noWrap: true } }}
+                            />
+                          </ListItem>
+                        ))}
+                      </Fragment>
                     );
                   })}
                 </List>

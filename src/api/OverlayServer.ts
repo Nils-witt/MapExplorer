@@ -1,6 +1,8 @@
 // Client for a tileserve-go server, which serves the map tile overlays.
 // Endpoints follow tileserve-go's internal/webserver/openapi.yaml.
 
+import type { GeoJSON } from 'geojson';
+
 // A map on the server (the `Map` schema); each one can be drawn as an
 // overlay from its tiles at `/maps/{uuid}/version/{version}/{z}/{x}/{y}.png`.
 export interface OverlayMap {
@@ -52,6 +54,18 @@ export interface OverlayGeoObject {
   updatedBy: string;
   // Names of the geo object groups it belongs to, sorted.
   groups: string[];
+}
+
+// A named GeoJSON layer of a map version, drawn over its tiles (the
+// `MapLayer` schema, metadata only).
+export interface OverlayLayer {
+  name: string;
+  // `#rrggbb`, or null when none was set and the client picks one.
+  color: string | null;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 // A tile listed in a map version's `index.json`.
@@ -168,6 +182,32 @@ export class OverlayServer {
     const path = `/maps/${encodeURIComponent(mapUuid)}/version/${encodeURIComponent(version)}/geo-objects`;
     return this.request<OverlayGeoObject[]>(
       search ? `${path}?${search}` : path,
+      signal,
+    );
+  }
+
+  // Lists a map version's GeoJSON layers ordered by name, without their
+  // GeoJSON.
+  async listLayers(
+    mapUuid: string,
+    version: string,
+    signal?: AbortSignal,
+  ): Promise<OverlayLayer[]> {
+    return this.request<OverlayLayer[]>(
+      `/maps/${encodeURIComponent(mapUuid)}/version/${encodeURIComponent(version)}/layers`,
+      signal,
+    );
+  }
+
+  // Fetches a layer's GeoJSON document.
+  async getLayer(
+    mapUuid: string,
+    version: string,
+    name: string,
+    signal?: AbortSignal,
+  ): Promise<GeoJSON> {
+    return this.request<GeoJSON>(
+      `/maps/${encodeURIComponent(mapUuid)}/version/${encodeURIComponent(version)}/layers/${encodeURIComponent(name)}`,
       signal,
     );
   }

@@ -1,4 +1,9 @@
-import type { OverlayGeoObject, OverlayMap } from '../api/OverlayServer';
+import type { GeoJSON } from 'geojson';
+import type {
+  OverlayGeoObject,
+  OverlayLayer,
+  OverlayMap,
+} from '../api/OverlayServer';
 import type { AppConfig, MapStyle } from './config';
 import type { ConnectedServer, MapPosition } from '../types';
 
@@ -38,13 +43,15 @@ function writeValue(key: string, value: string): void {
 // simplicity. Bump the version whenever a store is added - older installs
 // already have this database at version 3 (from earlier, retired stores).
 const IDB_DATABASE_NAME = 'mapexplorer';
-const IDB_DATABASE_VERSION = 8;
+const IDB_DATABASE_VERSION = 9;
 const OVERLAY_SERVERS_TABLE_NAME = 'overlayServers';
 const UNIT_SERVERS_TABLE_NAME = 'unitServers';
 const AVAILABLE_OVERLAYS_TABLE_NAME = 'availableOverlays';
 const AVAILABLE_OVERLAYS_SERVER_INDEX_NAME = 'serverId';
 const GEO_OBJECTS_TABLE_NAME = 'geoObjects';
 const GEO_OBJECTS_SERVER_INDEX_NAME = 'serverId';
+const OVERLAY_LAYERS_TABLE_NAME = 'overlayLayers';
+const OVERLAY_LAYERS_SERVER_INDEX_NAME = 'serverId';
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -94,6 +101,16 @@ function openDb(): Promise<IDBDatabase> {
           keyPath: ['serverId', 'overlayId', 'overlayVersion', 'uuid'],
         });
         geoObjectsStore.createIndex(GEO_OBJECTS_SERVER_INDEX_NAME, 'serverId');
+      }
+      if (!db.objectStoreNames.contains(OVERLAY_LAYERS_TABLE_NAME)) {
+        const overlayLayersStore = db.createObjectStore(
+          OVERLAY_LAYERS_TABLE_NAME,
+          { keyPath: ['serverId', 'overlayId', 'overlayVersion', 'name'] },
+        );
+        overlayLayersStore.createIndex(
+          OVERLAY_LAYERS_SERVER_INDEX_NAME,
+          'serverId',
+        );
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -180,6 +197,8 @@ type AvailableOverlayRecord = OverlayMap & {
   opacity?: number;
   // The version to draw. Unset to follow the overlay's currentVersion.
   selectedVersion?: string;
+  // Names of the GeoJSON layers the user switched off. Unset if none.
+  hiddenLayers?: string[];
 };
 
 export interface AvailableOverlaysState {
@@ -189,6 +208,9 @@ export interface AvailableOverlaysState {
   overlayOpacities: Record<string, number>;
   // Only overlays pinned to a version other than their current one.
   overlayVersions: Record<string, string>;
+  // Names of the GeoJSON layers switched off, by overlay. Only overlays
+  // with any.
+  overlayHiddenLayers: Record<string, string[]>;
 }
 
 export async function loadAvailableOverlays(): Promise<AvailableOverlaysState> {
@@ -200,12 +222,14 @@ export async function loadAvailableOverlays(): Promise<AvailableOverlaysState> {
   const enabled: { id: string; order: number }[] = [];
   const overlayOpacities: Record<string, number> = {};
   const overlayVersions: Record<string, string> = {};
+  const overlayHiddenLayers: Record<string, string[]> = {};
   for (const {
     serverId,
     enabled: isEnabled,
     enabledOrder,
     opacity,
     selectedVersion,
+    hiddenLayers,
     ...overlay
   } of stored) {
     // Rows stored before versions were fetched have none.
@@ -222,6 +246,9 @@ export async function loadAvailableOverlays(): Promise<AvailableOverlaysState> {
     if (selectedVersion !== undefined) {
       overlayVersions[overlay.uuid] = selectedVersion;
     }
+    if (hiddenLayers?.length) {
+      overlayHiddenLayers[overlay.uuid] = hiddenLayers;
+    }
   }
   return {
     overlays,
@@ -230,6 +257,7 @@ export async function loadAvailableOverlays(): Promise<AvailableOverlaysState> {
     ],
     overlayOpacities,
     overlayVersions,
+    overlayHiddenLayers,
   };
 }
 
@@ -238,6 +266,7 @@ export async function saveAvailableOverlays({
   enabledOverlayIds,
   overlayOpacities,
   overlayVersions,
+  overlayHiddenLayers,
 }: AvailableOverlaysState): Promise<void> {
   const records: AvailableOverlayRecord[] = Object.entries(overlays).flatMap(
     ([serverId, list]) =>
@@ -250,6 +279,7 @@ export async function saveAvailableOverlays({
           enabledOrder: enabledOrder !== -1 ? enabledOrder : undefined,
           opacity: overlayOpacities[overlay.uuid],
           selectedVersion: overlayVersions[overlay.uuid],
+          hiddenLayers: overlayHiddenLayers[overlay.uuid],
         };
       }),
   );
@@ -303,6 +333,54 @@ export function saveGeoObjects(geoObjects: StoredGeoObjects): Promise<void> {
       ),
   );
   return tableReplaceAllOrdered(GEO_OBJECTS_TABLE_NAME, records);
+}
+
+// A map version's GeoJSON layer together with its document.
+export type OverlayLayerData = OverlayLayer & { data: GeoJSON };
+
+// The GeoJSON layers last fetched for the drawn version of each enabled
+// overlay, one row per layer, so they're available straight away on startup
+// and while offline. `overlayVersion` is the version they were fetched for.
+type OverlayLayerRecord = OverlayLayerData & {
+  serverId: string;
+  overlayId: string;
+  overlayVersion: string;
+};
+
+// Layers by server id, overlay id and version, each version's in the
+// server's order.
+export type StoredOverlayLayers = Record<
+  string,
+  Record<string, Record<string, OverlayLayerData[]>>
+>;
+
+export async function loadOverlayLayers(): Promise<StoredOverlayLayers> {
+  const stored =
+    (await tableGetAllOrdered<OverlayLayerRecord>(OVERLAY_LAYERS_TABLE_NAME)) ??
+    [];
+  const layers: StoredOverlayLayers = {};
+  for (const { serverId, overlayId, overlayVersion, ...layer } of stored) {
+    ((layers[serverId] ??= {})[overlayId] ??= {})[overlayVersion] ??= [];
+    layers[serverId][overlayId][overlayVersion].push(layer);
+  }
+  return layers;
+}
+
+export function saveOverlayLayers(layers: StoredOverlayLayers): Promise<void> {
+  const records: OverlayLayerRecord[] = Object.entries(layers).flatMap(
+    ([serverId, byOverlay]) =>
+      Object.entries(byOverlay).flatMap(([overlayId, byVersion]) =>
+        Object.entries(byVersion).flatMap(([overlayVersion, list]) =>
+          list.map((layer) => ({
+            ...layer,
+            serverId,
+            overlayId,
+            overlayVersion,
+          })),
+        ),
+      ),
+  );
+  return tableReplaceAllOrdered(OVERLAY_LAYERS_TABLE_NAME, records);
 }
 
 // The configured servers are applied by ConnectedServersProvider.

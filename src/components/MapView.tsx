@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import {
   type MapRef,
   Marker,
@@ -22,7 +22,7 @@ import { SettingsButtonControl } from './mapControls/SettingsButtonControl';
 import { UnitMarkers } from './UnitMarkers';
 import { useAuth } from '../context/AuthContext';
 import { useConnectedServers } from '../context/ConnectedServersContext';
-import { useOverlays } from '../context/OverlaysContext';
+import { type EnabledOverlay, useOverlays } from '../context/OverlaysContext';
 import { loadAppConfig } from '../lib/config';
 
 import {
@@ -57,6 +57,25 @@ const DEFAULT_MAP_POSITION = {
   bearing: 0,
   pitch: 0,
 };
+
+// Ids of the map layers drawing an overlay's GeoJSON layer's polygons,
+// lines and points. Layer names can't contain "/", so they never collide.
+const geoJsonLayerIds = (overlayId: string, name: string) => ({
+  fill: `overlay-layer-${overlayId}-geojson-${name}-fill`,
+  line: `overlay-layer-${overlayId}-geojson-${name}-line`,
+  circle: `overlay-layer-${overlayId}-geojson-${name}-circle`,
+});
+
+// An overlay's map layers, bottom first: its tiles, then its GeoJSON layers.
+function overlayLayerIds(overlay: EnabledOverlay): string[] {
+  return [
+    `overlay-layer-${overlay.id}`,
+    ...overlay.layers.flatMap(({ name }) => {
+      const ids = geoJsonLayerIds(overlay.id, name);
+      return [ids.fill, ids.line, ids.circle];
+    }),
+  ];
+}
 
 export function MapView() {
   const mapRef = useRef<MapRef | null>(null);
@@ -97,15 +116,15 @@ export function MapView() {
   }, []);
 
   // Layers are only stacked in render order when first added, so move them
-  // to the top one by one, bottom first, whenever the order changes.
-  const overlayOrder = enabledOverlays.map((overlay) => overlay.id).join(',');
+  // to the top one by one, bottom first, whenever the order changes. Each
+  // overlay's GeoJSON layers sit right above its tiles.
+  const overlayOrder = enabledOverlays.flatMap(overlayLayerIds).join('\n');
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || !overlayOrder) {
       return;
     }
-    for (const id of overlayOrder.split(',')) {
-      const layerId = `overlay-layer-${id}`;
+    for (const layerId of overlayOrder.split('\n')) {
       if (map.getLayer(layerId)) {
         map.moveLayer(layerId);
       }
@@ -191,21 +210,59 @@ export function MapView() {
           }}
         />
         {enabledOverlays.map((overlay) => (
-          <Source
-            key={overlay.id}
-            id={`overlay-source-${overlay.id}`}
-            type="raster"
-            tiles={overlay.tiles}
-            tileSize={256}
-          >
-            <Layer
-              id={`overlay-layer-${overlay.id}`}
+          <Fragment key={overlay.id}>
+            <Source
+              id={`overlay-source-${overlay.id}`}
               type="raster"
-              paint={{
-                'raster-opacity': overlay.opacity,
-              }}
-            />
-          </Source>
+              tiles={overlay.tiles}
+              tileSize={256}
+            >
+              <Layer
+                id={`overlay-layer-${overlay.id}`}
+                type="raster"
+                paint={{
+                  'raster-opacity': overlay.opacity,
+                }}
+              />
+            </Source>
+            {/* Styled like tileserve-go's own map preview. */}
+            {overlay.layers.map((layer) => {
+              const ids = geoJsonLayerIds(overlay.id, layer.name);
+              return (
+                <Source
+                  key={layer.name}
+                  id={`overlay-geojson-${overlay.id}-${layer.name}`}
+                  type="geojson"
+                  data={layer.data}
+                >
+                  <Layer
+                    id={ids.fill}
+                    type="fill"
+                    filter={['==', '$type', 'Polygon']}
+                    paint={{ 'fill-color': layer.color, 'fill-opacity': 0.25 }}
+                  />
+                  {/* Also outlines the polygons. */}
+                  <Layer
+                    id={ids.line}
+                    type="line"
+                    filter={['!=', '$type', 'Point']}
+                    paint={{ 'line-color': layer.color, 'line-width': 2 }}
+                  />
+                  <Layer
+                    id={ids.circle}
+                    type="circle"
+                    filter={['==', '$type', 'Point']}
+                    paint={{
+                      'circle-color': layer.color,
+                      'circle-radius': 5,
+                      'circle-stroke-color': '#ffffff',
+                      'circle-stroke-width': 1.5,
+                    }}
+                  />
+                </Source>
+              );
+            })}
+          </Fragment>
         ))}
         <UnitMarkers />
       </Map>

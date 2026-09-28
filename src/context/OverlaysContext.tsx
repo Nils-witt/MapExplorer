@@ -4,9 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
+import type { GeoJSON } from 'geojson';
 import { useConnectedServers } from './ConnectedServersContext.tsx';
 import {
   type OverlayGeoObject,
@@ -18,9 +20,13 @@ import { useAuth } from './AuthContext.tsx';
 import {
   loadAvailableOverlays,
   loadGeoObjects,
+  loadOverlayLayers,
+  type OverlayLayerData,
   saveAvailableOverlays,
   saveGeoObjects,
+  saveOverlayLayers,
 } from '../lib/storage.ts';
+import { layerColor } from '../lib/layerColors.ts';
 
 export const DEFAULT_OVERLAY_OPACITY = 0.8;
 
@@ -33,6 +39,22 @@ export interface EnabledOverlay {
   version: string;
   tiles: string[];
   opacity: number;
+  // The drawn version's GeoJSON layers the user hasn't switched off, in the
+  // server's order.
+  layers: EnabledOverlayLayer[];
+}
+
+export interface EnabledOverlayLayer {
+  name: string;
+  color: string;
+  data: GeoJSON;
+}
+
+// A GeoJSON layer as listed in the settings.
+export interface OverlayLayerInfo {
+  name: string;
+  // The layer's own color, or one from the palette.
+  color: string;
 }
 
 interface OverlaysContextValue {
@@ -53,6 +75,14 @@ interface OverlaysContextValue {
   enabledOverlays: EnabledOverlay[];
   // Geo objects of every version of every known overlay.
   geoObjects: GeoObjectsByServer;
+  // The GeoJSON layers of the version drawn for an overlay, as last fetched
+  // from the given server. Empty until the overlay has been enabled.
+  getOverlayLayers: (
+    serverId: string,
+    overlay: OverlayMap,
+  ) => OverlayLayerInfo[];
+  isLayerVisible: (overlayId: string, name: string) => boolean;
+  setLayerVisible: (overlayId: string, name: string, visible: boolean) => void;
 }
 
 // Geo objects by server id, overlay id and version, in that order.
@@ -60,6 +90,21 @@ export type GeoObjectsByServer = Record<
   string,
   Record<string, Record<string, OverlayGeoObject[]>>
 >;
+
+// GeoJSON layers by server id, overlay id and version, in that order.
+export type LayersByServer = Record<
+  string,
+  Record<string, Record<string, OverlayLayerData[]>>
+>;
+
+// Resolves each layer's color: its own, or the palette's by its place in
+// the version's list (as tileserve-go's frontend does).
+function resolveLayerColors(layers: OverlayLayerData[]) {
+  return layers.map((layer, index) => ({
+    ...layer,
+    color: layer.color ?? layerColor(index),
+  }));
+}
 
 const OverlaysContext = createContext<OverlaysContextValue | null>(null);
 
@@ -82,6 +127,16 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     Record<string, string>
   >({});
   const [geoObjects, setGeoObjects] = useState<GeoObjectsByServer>({});
+  const [layers, setLayers] = useState<LayersByServer>({});
+  // Read by the layer fetch to reuse unchanged documents without refetching
+  // whenever the layers change.
+  const layersRef = useRef(layers);
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+  const [overlayHiddenLayers, setOverlayHiddenLayers] = useState<
+    Record<string, string[]>
+  >({});
   // Holds off saving until the cached overlays and geo objects have been
   // read, so the empty initial state never overwrites what's already in
   // IndexedDB.
@@ -89,20 +144,25 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadAvailableOverlays(), loadGeoObjects()]).then(
-      ([cached, cachedGeoObjects]) => {
-        if (cancelled) {
-          return;
-        }
-        // Anything fetched in the meantime is fresher than the cache.
-        setOverlays((prev) => ({ ...cached.overlays, ...prev }));
-        setGeoObjects((prev) => ({ ...cachedGeoObjects, ...prev }));
-        setEnabledOverlayIds(cached.enabledOverlayIds);
-        setOverlayOpacities(cached.overlayOpacities);
-        setOverlayVersions(cached.overlayVersions);
-        setCacheLoaded(true);
-      },
-    );
+    void Promise.all([
+      loadAvailableOverlays(),
+      loadGeoObjects(),
+      loadOverlayLayers(),
+    ]).then(([cached, cachedGeoObjects, cachedLayers]) => {
+      if (cancelled) {
+        return;
+      }
+      // Anything fetched in the meantime is fresher than the cache. Layers
+      // are only fetched once the cache is loaded.
+      setOverlays((prev) => ({ ...cached.overlays, ...prev }));
+      setGeoObjects((prev) => ({ ...cachedGeoObjects, ...prev }));
+      setLayers(cachedLayers);
+      setEnabledOverlayIds(cached.enabledOverlayIds);
+      setOverlayOpacities(cached.overlayOpacities);
+      setOverlayVersions(cached.overlayVersions);
+      setOverlayHiddenLayers(cached.overlayHiddenLayers);
+      setCacheLoaded(true);
+    });
     return () => {
       cancelled = true;
     };
@@ -199,6 +259,30 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
         }
         return next;
       });
+      // Same for layers, which only exist for versions that were drawn.
+      setLayers((prev) => {
+        const next: LayersByServer = {};
+        for (const server of allOverlayServers) {
+          const maps = fetched[server.id];
+          if (!maps) {
+            if (prev[server.id]) {
+              next[server.id] = prev[server.id];
+            }
+            continue;
+          }
+          const serverLayers: LayersByServer[string] = {};
+          for (const map of maps) {
+            for (const { version } of map.versions) {
+              const list = prev[server.id]?.[map.uuid]?.[version];
+              if (list) {
+                (serverLayers[map.uuid] ??= {})[version] = list;
+              }
+            }
+          }
+          next[server.id] = serverLayers;
+        }
+        return next;
+      });
     };
 
     void fetchOverlays();
@@ -219,6 +303,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
         enabledOverlayIds,
         overlayOpacities,
         overlayVersions,
+        overlayHiddenLayers,
       });
     }
   }, [
@@ -227,6 +312,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     enabledOverlayIds,
     overlayOpacities,
     overlayVersions,
+    overlayHiddenLayers,
   ]);
 
   useEffect(() => {
@@ -234,6 +320,12 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       void saveGeoObjects(geoObjects);
     }
   }, [cacheLoaded, geoObjects]);
+
+  useEffect(() => {
+    if (cacheLoaded) {
+      void saveOverlayLayers(layers);
+    }
+  }, [cacheLoaded, layers]);
 
   const setOverlayEnabled = useCallback(
     (overlayId: string, enabled: boolean) => {
@@ -307,6 +399,127 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     return result;
   }, [enabledOverlayIds, overlays, overlayServers, getOverlayVersion]);
 
+  // Fetches the GeoJSON layers of each enabled overlay's drawn version.
+  // Documents are only downloaded when new or updated since cached.
+  useEffect(() => {
+    if (!cacheLoaded) {
+      return;
+    }
+    const controller = new AbortController();
+    const fetchLayers = async () => {
+      const fetched: {
+        serverId: string;
+        overlayId: string;
+        version: string;
+        list: OverlayLayerData[];
+      }[] = [];
+      await Promise.all(
+        enabledSources.map(async ({ overlay, server, version }) => {
+          const ovS = new OverlayServer(server.baseUrl, () => accessToken);
+          const cached =
+            layersRef.current[server.id]?.[overlay.uuid]?.[version] ?? [];
+          try {
+            const listed = await ovS.listLayers(
+              overlay.uuid,
+              version,
+              controller.signal,
+            );
+            const list = await Promise.all(
+              listed.map(async (layer): Promise<OverlayLayerData | null> => {
+                const previous = cached.find((c) => c.name === layer.name);
+                if (previous && previous.updatedAt === layer.updatedAt) {
+                  return { ...layer, data: previous.data };
+                }
+                try {
+                  const data = await ovS.getLayer(
+                    overlay.uuid,
+                    version,
+                    layer.name,
+                    controller.signal,
+                  );
+                  return { ...layer, data };
+                } catch (error) {
+                  if (!controller.signal.aborted) {
+                    console.error(
+                      `Error occurred while fetching layer ${layer.name} of overlay ${overlay.name} version ${version} from server ${server.name}:`,
+                      error,
+                    );
+                  }
+                  // Better an outdated copy than none.
+                  return previous ?? null;
+                }
+              }),
+            );
+            fetched.push({
+              serverId: server.id,
+              overlayId: overlay.uuid,
+              version,
+              list: list.filter((layer) => layer !== null),
+            });
+          } catch (error) {
+            // The version keeps its last known layers.
+            if (!controller.signal.aborted) {
+              console.error(
+                `Error occurred while fetching layers of overlay ${overlay.name} version ${version} from server ${server.name}:`,
+                error,
+              );
+            }
+          }
+        }),
+      );
+      if (controller.signal.aborted || fetched.length === 0) {
+        return;
+      }
+      setLayers((prev) => {
+        const next: LayersByServer = { ...prev };
+        for (const { serverId, overlayId, version, list } of fetched) {
+          next[serverId] = {
+            ...next[serverId],
+            [overlayId]: { ...next[serverId]?.[overlayId], [version]: list },
+          };
+        }
+        return next;
+      });
+    };
+
+    void fetchLayers();
+
+    return () => {
+      controller.abort();
+    };
+  }, [cacheLoaded, enabledSources, accessToken]);
+
+  const isLayerVisible = useCallback(
+    (overlayId: string, name: string) =>
+      !overlayHiddenLayers[overlayId]?.includes(name),
+    [overlayHiddenLayers],
+  );
+
+  const setLayerVisible = useCallback(
+    (overlayId: string, name: string, visible: boolean) => {
+      setOverlayHiddenLayers((prev) => {
+        const without = (prev[overlayId] ?? []).filter((n) => n !== name);
+        const hidden = visible ? without : [...without, name];
+        const next = { ...prev };
+        if (hidden.length > 0) {
+          next[overlayId] = hidden;
+        } else {
+          delete next[overlayId];
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const getOverlayLayers = useCallback(
+    (serverId: string, overlay: OverlayMap): OverlayLayerInfo[] =>
+      resolveLayerColors(
+        layers[serverId]?.[overlay.uuid]?.[getOverlayVersion(overlay)] ?? [],
+      ).map(({ name, color }) => ({ name, color })),
+    [layers, getOverlayVersion],
+  );
+
   const moveOverlay = useCallback(
     (overlayId: string, direction: 'up' | 'down') => {
       // Swap with the nearest neighbor that's actually drawn, skipping
@@ -352,9 +565,14 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
             `${baseUrl}/maps/${overlay.uuid}/version/${version}/{z}/{x}/{y}.png`,
           ],
           opacity: getOverlayOpacity(overlay.uuid),
+          layers: resolveLayerColors(
+            layers[server.id]?.[overlay.uuid]?.[version] ?? [],
+          )
+            .filter(({ name }) => isLayerVisible(overlay.uuid, name))
+            .map(({ name, color, data }) => ({ name, color, data })),
         };
       }),
-    [enabledSources, getOverlayOpacity],
+    [enabledSources, getOverlayOpacity, layers, isLayerVisible],
   );
 
   // What's cached for disabled servers isn't passed on.
@@ -389,6 +607,9 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       setOverlayVersion,
       enabledOverlays,
       geoObjects: activeGeoObjects,
+      getOverlayLayers,
+      isLayerVisible,
+      setLayerVisible,
     }),
     [
       activeOverlays,
@@ -401,6 +622,9 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       setOverlayVersion,
       enabledOverlays,
       activeGeoObjects,
+      getOverlayLayers,
+      isLayerVisible,
+      setLayerVisible,
     ],
   );
 
