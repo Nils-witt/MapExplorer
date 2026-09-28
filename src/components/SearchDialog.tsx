@@ -1,17 +1,25 @@
 import { useMemo, useState } from 'react';
+import Badge from '@mui/material/Badge';
+import Checkbox from '@mui/material/Checkbox';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListSubheader from '@mui/material/ListSubheader';
 import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import SearchIcon from '@mui/icons-material/Search';
 import { useOverlays } from '../context/OverlaysContext.tsx';
 import { useUnits } from '../context/UnitsContext';
@@ -22,6 +30,8 @@ interface SearchableGeoObject {
   label: string;
   sublabel: string;
   searchText: string;
+  // The overlay the marker belongs to, unset for units.
+  overlayId?: string;
   latitude: number;
   longitude: number;
 }
@@ -34,8 +44,36 @@ interface SearchDialogProps {
 
 const MAX_RESULTS = 50;
 
+// Renders a menu entry that toggles a filter; the menu stays open.
+function FilterMenuItem({
+  label,
+  checked,
+  disabled,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <MenuItem dense disabled={disabled} onClick={onToggle}>
+      <ListItemIcon>
+        <Checkbox edge="start" size="small" checked={checked} disableRipple />
+      </ListItemIcon>
+      {label}
+    </MenuItem>
+  );
+}
+
 export function SearchDialog({ open, onClose, onSelect }: SearchDialogProps) {
   const [query, setQuery] = useState('');
+  const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
+  // Filters are kept for the session, across opening and closing the dialog.
+  const [showUnits, setShowUnits] = useState(true);
+  const [showMarkers, setShowMarkers] = useState(true);
+  // Hidden rather than shown overlays, so newly enabled overlays show up.
+  const [hiddenOverlayIds, setHiddenOverlayIds] = useState<string[]>([]);
   // On phones the dialog fills the screen.
   const isSmallScreen = useMediaQuery(useTheme().breakpoints.down('sm'));
   const { geoObjects, enabledOverlays } = useOverlays();
@@ -52,6 +90,7 @@ export function SearchDialog({ open, onClose, onSelect }: SearchDialogProps) {
           label: entry.name,
           sublabel: overlay.name,
           searchText: entry.name.toLowerCase(),
+          overlayId: overlay.id,
           latitude: entry.latitude,
           longitude: entry.longitude,
         })),
@@ -88,12 +127,38 @@ export function SearchDialog({ open, onClose, onSelect }: SearchDialogProps) {
   const matches = useMemo(
     () =>
       trimmedQuery
-        ? [...unitItems, ...overlayItems]
+        ? [
+            ...(showUnits ? unitItems : []),
+            ...(showMarkers
+              ? overlayItems.filter(
+                  (item) => !hiddenOverlayIds.includes(item.overlayId ?? ''),
+                )
+              : []),
+          ]
             .filter((item) => item.searchText.includes(trimmedQuery))
             .slice(0, MAX_RESULTS)
         : [],
-    [trimmedQuery, unitItems, overlayItems],
+    [
+      trimmedQuery,
+      unitItems,
+      overlayItems,
+      showUnits,
+      showMarkers,
+      hiddenOverlayIds,
+    ],
   );
+
+  const filterActive =
+    !showUnits ||
+    !showMarkers ||
+    enabledOverlays.some((overlay) => hiddenOverlayIds.includes(overlay.id));
+
+  const toggleOverlay = (overlayId: string) =>
+    setHiddenOverlayIds((ids) =>
+      ids.includes(overlayId)
+        ? ids.filter((id) => id !== overlayId)
+        : [...ids, overlayId],
+    );
 
   const handleSelect = (item: SearchableGeoObject) => {
     onSelect(item.uuid, item.latitude, item.longitude);
@@ -156,10 +221,61 @@ export function SearchDialog({ open, onClose, onSelect }: SearchDialogProps) {
                   <SearchIcon />
                 </InputAdornment>
               ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    edge="end"
+                    size="small"
+                    aria-label="Filter results"
+                    title="Filter results"
+                    onClick={(event) => setFilterAnchor(event.currentTarget)}
+                  >
+                    <Badge
+                      color="primary"
+                      variant="dot"
+                      invisible={!filterActive}
+                    >
+                      <FilterListIcon />
+                    </Badge>
+                  </IconButton>
+                </InputAdornment>
+              ),
             },
           }}
           sx={{ mt: 1 }}
         />
+        <Menu
+          anchorEl={filterAnchor}
+          open={filterAnchor !== null}
+          onClose={() => setFilterAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          <ListSubheader>Type</ListSubheader>
+          <FilterMenuItem
+            label="Units"
+            checked={showUnits}
+            onToggle={() => setShowUnits((show) => !show)}
+          />
+          <FilterMenuItem
+            label="Markers"
+            checked={showMarkers}
+            onToggle={() => setShowMarkers((show) => !show)}
+          />
+          {enabledOverlays.length > 0 && <Divider />}
+          {enabledOverlays.length > 0 && (
+            <ListSubheader>Overlays</ListSubheader>
+          )}
+          {enabledOverlays.map((overlay) => (
+            <FilterMenuItem
+              key={overlay.id}
+              label={overlay.name}
+              checked={showMarkers && !hiddenOverlayIds.includes(overlay.id)}
+              disabled={!showMarkers}
+              onToggle={() => toggleOverlay(overlay.id)}
+            />
+          ))}
+        </Menu>
         {trimmedQuery && matches.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
             No markers found
