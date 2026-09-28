@@ -17,12 +17,6 @@ export interface OidcConfig {
 }
 
 export async function loadOidcConfig(): Promise<OidcConfig> {
-  if (import.meta.env.DEV) {
-    return {
-      issuer: import.meta.env.VITE_OIDC_ISSUER,
-      clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-    };
-  }
   const config = await loadAppConfig();
   if (!config.oidcIssuer || !config.oidcClientId) {
     throw new Error(

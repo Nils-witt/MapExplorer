@@ -32,3 +32,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local runtime config for the dev server (see config.example.json)
+public/config.json

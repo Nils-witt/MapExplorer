@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { execSync } from 'node:child_process';
@@ -76,6 +76,32 @@ function customServiceWorker(): Plugin {
   };
 }
 
+// Dev server only: proxies /config.json to DEV_CONFIG_JSON_URL (see
+// .env.example), so a deployment's config can be used without a local
+// public/config.json.
+function devConfigJsonProxy(): Plugin {
+  return {
+    name: 'dev-config-json-proxy',
+    apply: 'serve',
+    config(_config, { mode }) {
+      const target = loadEnv(mode, process.cwd(), '').DEV_CONFIG_JSON_URL;
+      if (!target) return;
+      const url = new URL(target);
+      return {
+        server: {
+          proxy: {
+            '/config.json': {
+              target: url.origin,
+              changeOrigin: true,
+              rewrite: () => url.pathname + url.search,
+            },
+          },
+        },
+      };
+    },
+  };
+}
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(getAppVersion()),
@@ -84,6 +110,7 @@ export default defineConfig({
   plugins: [
     react(),
     customServiceWorker(),
+    devConfigJsonProxy(),
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
@@ -188,7 +215,7 @@ export default defineConfig({
               plugins: [
                 {
                   // Overlays cached from the settings live in caches of
-                  // their own (`<server id>-<map uuid>-<version>`), so fall
+                  // their own (`<map uuid>-<version>`), so fall
                   // back to searching every cache before hitting the network.
                   cachedResponseWillBeUsed: async ({
                     cachedResponse,

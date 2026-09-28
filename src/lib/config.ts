@@ -59,24 +59,9 @@ export interface ConfiguredServers {
   unitServers: ConnectedServer[];
 }
 
-// The servers set by the deployment: in dev mode from VITE_OVERLAY_SERVER_URL
-// / VITE_UNIT_SERVER_URL (see .env.example), otherwise from config.json.
-// Rejects when config.json can't be loaded.
+// The servers set by the deployment in config.json. Rejects when config.json
+// can't be loaded.
 export async function loadConfiguredServers(): Promise<ConfiguredServers> {
-  if (import.meta.env.DEV) {
-    const env = import.meta.env;
-    return {
-      overlayServers: configuredServers(CONFIGURED_OVERLAY_SERVER_ID, [
-        {
-          url: env.VITE_OVERLAY_SERVER_URL,
-          name: env.VITE_OVERLAY_SERVER_NAME,
-        },
-      ]),
-      unitServers: configuredServers(CONFIGURED_UNIT_SERVER_ID, [
-        { url: env.VITE_UNIT_SERVER_URL, name: env.VITE_UNIT_SERVER_NAME },
-      ]),
-    };
-  }
   const config = await loadAppConfig();
   return {
     overlayServers: configuredServers(
