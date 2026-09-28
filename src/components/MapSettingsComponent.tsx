@@ -12,7 +12,7 @@ import { loadCustomStyleUrl, loadMapStyles } from '../lib/storage';
 const DEFAULT_OPTION = '';
 const CUSTOM_OPTION = 'custom';
 
-export function MapSettingsComponent({
+function MapSettingsComponent({
   styleUrl,
   onApplyStyle,
 }: {

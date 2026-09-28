@@ -83,13 +83,6 @@ export function completeOidcLogin(search: string): Promise<User> {
   return inFlight;
 }
 
-// The signed-in user (access/refresh/ID token, profile), or null when signed
-// out or the stored session has expired.
-export async function getOidcUser(): Promise<User | null> {
-  const user = await (await getUserManager()).getUser();
-  return user && !user.expired ? user : null;
-}
-
 // Seconds of remaining access-token lifetime below which a renewal is due;
 // matches the library's default AccessTokenExpiring notification time.
 const RENEW_THRESHOLD_SECONDS = 60;
