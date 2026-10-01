@@ -32,6 +32,22 @@ export interface OverlayMapVersion {
   version: string;
   createdAt: string;
   createdBy: string;
+  // Omitted while the server hasn't computed them yet, or when the version
+  // has no tiles.
+  bounds?: OverlayMapVersionBounds;
+}
+
+// A version's tile extent (the `MapVersionBounds` schema), computed from its
+// tiles at the lowest zoom level present.
+export interface OverlayMapVersionBounds {
+  // Lowest zoom level with tiles; the bounding box source.
+  minZoom: number;
+  // Highest zoom level with tiles.
+  maxZoom: number;
+  west: number;
+  south: number;
+  east: number;
+  north: number;
 }
 
 // A point of interest tied to a map version (the `GeoObject` schema).

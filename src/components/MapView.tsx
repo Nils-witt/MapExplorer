@@ -67,6 +67,21 @@ const geoJsonLayerIds = (overlayId: string, name: string) => ({
   circle: `overlay-layer-${overlayId}-geojson-${name}-circle`,
 });
 
+// Changes whenever an overlay's tile bounds do.
+function rasterSourceKey(overlay: EnabledOverlay): string {
+  const { bounds } = overlay;
+  return bounds
+    ? [
+        bounds.west,
+        bounds.south,
+        bounds.east,
+        bounds.north,
+        bounds.minZoom,
+        bounds.maxZoom,
+      ].join(',')
+    : 'unbounded';
+}
+
 // An overlay's map layers, bottom first: its tiles, then its GeoJSON layers.
 function overlayLayerIds(overlay: EnabledOverlay): string[] {
   return [
@@ -120,17 +135,30 @@ export function MapView() {
   // Layers are only stacked in render order when first added, so move them
   // to the top one by one, bottom first, whenever the order changes. Each
   // overlay's GeoJSON layers sit right above its tiles.
+  // Layers re-added later, like a raster layer whose source was remounted,
+  // are moved back into place on the next style update.
   const overlayOrder = enabledOverlays.flatMap(overlayLayerIds).join('\n');
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || !overlayOrder) {
       return;
     }
-    for (const layerId of overlayOrder.split('\n')) {
-      if (map.getLayer(layerId)) {
+    const wanted = overlayOrder.split('\n');
+    const reorder = () => {
+      const present = wanted.filter((layerId) => map.getLayer(layerId));
+      const top = map.getLayersOrder().slice(-present.length);
+      if (present.every((layerId, index) => top[index] === layerId)) {
+        return;
+      }
+      for (const layerId of present) {
         map.moveLayer(layerId);
       }
-    }
+    };
+    reorder();
+    map.on('styledata', reorder);
+    return () => {
+      map.off('styledata', reorder);
+    };
   }, [overlayOrder]);
 
   const handleApplyStyle = (url: string) => {
@@ -213,11 +241,23 @@ export function MapView() {
         />
         {enabledOverlays.map((overlay) => (
           <Fragment key={overlay.id}>
+            {/* Keyed by the bounds, which can't be changed in place. */}
             <Source
+              key={rasterSourceKey(overlay)}
               id={`overlay-source-${overlay.id}`}
               type="raster"
               tiles={overlay.tiles}
               tileSize={256}
+              {...(overlay.bounds && {
+                bounds: [
+                  overlay.bounds.west,
+                  overlay.bounds.south,
+                  overlay.bounds.east,
+                  overlay.bounds.north,
+                ],
+                minzoom: overlay.bounds.minZoom,
+                maxzoom: overlay.bounds.maxZoom,
+              })}
             >
               <Layer
                 id={`overlay-layer-${overlay.id}`}

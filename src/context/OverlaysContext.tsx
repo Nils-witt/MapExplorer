@@ -13,6 +13,7 @@ import { useConnectedServers } from './ConnectedServersContext.tsx';
 import {
   type OverlayGeoObject,
   type OverlayMap,
+  type OverlayMapVersionBounds,
   OverlayServer,
 } from '../api/OverlayServer.ts';
 import { type ConnectedServer, isServerEnabled } from '../types.ts';
@@ -38,6 +39,8 @@ export interface EnabledOverlay {
   // The version drawn.
   version: string;
   tiles: string[];
+  // The drawn version's tile extent, if the server has computed it.
+  bounds?: OverlayMapVersionBounds;
   opacity: number;
   // The drawn version's GeoJSON layers the user hasn't switched off, in the
   // server's order.
@@ -564,6 +567,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
           tiles: [
             `${baseUrl}/maps/${overlay.uuid}/version/${version}/{z}/{x}/{y}.png`,
           ],
+          bounds: overlay.versions.find((v) => v.version === version)?.bounds,
           opacity: getOverlayOpacity(overlay.uuid),
           layers: resolveLayerColors(
             layers[server.id]?.[overlay.uuid]?.[version] ?? [],
