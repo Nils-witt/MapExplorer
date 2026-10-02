@@ -122,6 +122,12 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
   );
 
   const [overlays, setOverlays] = useState<Record<string, OverlayMap[]>>({});
+  // Read by the overlay fetch to reuse known tile counts: a version's tiles
+  // never change, so its count is only fetched once.
+  const overlaysRef = useRef(overlays);
+  useEffect(() => {
+    overlaysRef.current = overlays;
+  }, [overlays]);
   const [enabledOverlayIds, setEnabledOverlayIds] = useState<string[]>([]);
   const [overlayOpacities, setOverlayOpacities] = useState<
     Record<string, number>
@@ -196,6 +202,36 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
             return;
           }
           fetched[server.id] = maps;
+          await Promise.all(
+            maps.flatMap((map) =>
+              map.versions.map(async (version) => {
+                const known = overlaysRef.current[server.id]
+                  ?.find(({ uuid }) => uuid === map.uuid)
+                  ?.versions.find(
+                    (v) => v.version === version.version,
+                  )?.tileCount;
+                if (known !== undefined) {
+                  version.tileCount = known;
+                  return;
+                }
+                try {
+                  const tiles = await ovS.listTiles(
+                    map.uuid,
+                    version.version,
+                    controller.signal,
+                  );
+                  version.tileCount = tiles.length;
+                } catch (error) {
+                  if (!controller.signal.aborted) {
+                    console.error(
+                      `Error occurred while fetching the tile list of overlay ${map.name} version ${version.version} from server ${server.name}:`,
+                      error,
+                    );
+                  }
+                }
+              }),
+            ),
+          );
           const serverGeoObjects: GeoObjectsByServer[string] = {};
           fetchedGeoObjects[server.id] = serverGeoObjects;
           await Promise.all(

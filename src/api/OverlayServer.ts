@@ -35,6 +35,9 @@ export interface OverlayMapVersion {
   // Omitted while the server hasn't computed them yet, or when the version
   // has no tiles.
   bounds?: OverlayMapVersionBounds;
+  // Not part of the schema: how many tiles the version's `index.json` lists,
+  // filled in by the app when it discovers the version. Unset until then.
+  tileCount?: number;
 }
 
 // A version's tile extent (the `MapVersionBounds` schema), computed from its

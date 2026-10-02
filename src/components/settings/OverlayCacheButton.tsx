@@ -40,29 +40,37 @@ export default function OverlayCacheButton({
     value: CacheState;
   } | null>(null);
   const current = state?.version === version ? state.value : null;
+  const tileCount = overlay.versions.find(
+    (v) => v.version === version,
+  )?.tileCount;
 
   useEffect(() => {
     if (!isTileCacheSupported()) {
       return;
     }
     let cancelled = false;
-    void getOverlayCacheStatus(overlay.uuid, version).then((result) => {
-      if (cancelled || result.status === 'none') {
-        return;
-      }
-      const value: CacheState =
-        result.status === 'partial'
-          ? { status: 'partial', cached: result.cached, total: result.total }
-          : { status: 'done' };
-      // Don't clobber a caching run started in the meantime.
-      setState((prev) =>
-        prev?.version === version ? prev : { version, value },
-      );
-    });
+    void getOverlayCacheStatus(overlay.uuid, version, tileCount).then(
+      (result) => {
+        if (cancelled || result.status === 'none') {
+          return;
+        }
+        const value: CacheState =
+          result.status === 'partial'
+            ? { status: 'partial', cached: result.cached, total: result.total }
+            : { status: 'done' };
+        // Don't clobber a caching run in progress. Anything else is updated,
+        // since the tile count may arrive after the first check.
+        setState((prev) =>
+          prev?.version === version && prev.value.status === 'caching'
+            ? prev
+            : { version, value },
+        );
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, [server.id, overlay.uuid, version]);
+  }, [server.id, overlay.uuid, version, tileCount]);
 
   if (!isTileCacheSupported()) {
     return null;
