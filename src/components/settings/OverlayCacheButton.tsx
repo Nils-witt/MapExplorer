@@ -4,18 +4,20 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
 import DownloadForOfflineIcon from '@mui/icons-material/DownloadForOffline';
+import DownloadingIcon from '@mui/icons-material/Downloading';
 import type { OverlayMap } from '../../api/OverlayServer.ts';
 import type { ConnectedServer } from '../../types.ts';
 import { useServerAuth } from '../../context/ServerAuthContext.tsx';
 import {
   cacheOverlayTiles,
-  isOverlayCached,
+  getOverlayCacheStatus,
   isTileCacheSupported,
 } from '../../lib/tileCache.ts';
 
 type CacheState =
   | { status: 'caching'; done: number; total: number }
   | { status: 'done'; cached?: number; total?: number }
+  | { status: 'partial'; cached: number; total: number }
   | { status: 'error' };
 
 interface OverlayCacheButtonProps {
@@ -44,15 +46,18 @@ export default function OverlayCacheButton({
       return;
     }
     let cancelled = false;
-    void isOverlayCached(overlay.uuid, version).then((cached) => {
-      if (!cancelled && cached) {
-        // Don't clobber a caching run started in the meantime.
-        setState((prev) =>
-          prev?.version === version
-            ? prev
-            : { version, value: { status: 'done' } },
-        );
+    void getOverlayCacheStatus(overlay.uuid, version).then((result) => {
+      if (cancelled || result.status === 'none') {
+        return;
       }
+      const value: CacheState =
+        result.status === 'partial'
+          ? { status: 'partial', cached: result.cached, total: result.total }
+          : { status: 'done' };
+      // Don't clobber a caching run started in the meantime.
+      setState((prev) =>
+        prev?.version === version ? prev : { version, value },
+      );
     });
     return () => {
       cancelled = true;
@@ -77,7 +82,9 @@ export default function OverlayCacheButton({
       update(
         result.total > 0 && result.cached === 0
           ? { status: 'error' }
-          : { status: 'done', cached: result.cached, total: result.total },
+          : result.cached < result.total
+            ? { status: 'partial', cached: result.cached, total: result.total }
+            : { status: 'done', cached: result.cached, total: result.total },
       );
     } catch (error) {
       console.error(`Failed to cache overlay ${overlay.name}:`, error);
@@ -92,9 +99,11 @@ export default function OverlayCacheButton({
         ? current.total !== undefined
           ? `Cached ${current.cached}/${current.total} tiles of v${version}`
           : `v${version} is cached - click to refresh`
-        : current?.status === 'error'
-          ? 'Failed to cache tiles - click to retry'
-          : `Cache v${version} for offline use`;
+        : current?.status === 'partial'
+          ? `Partially cached: ${current.cached}/${current.total} tiles of v${version} - click to retry`
+          : current?.status === 'error'
+            ? 'Failed to cache tiles - click to retry'
+            : `Cache v${version} for offline use`;
 
   return (
     <Tooltip title={tooltip}>
@@ -114,6 +123,8 @@ export default function OverlayCacheButton({
             />
           ) : current?.status === 'done' ? (
             <DownloadDoneIcon fontSize="small" color="success" />
+          ) : current?.status === 'partial' ? (
+            <DownloadingIcon fontSize="small" color="warning" />
           ) : (
             <DownloadForOfflineIcon
               fontSize="small"

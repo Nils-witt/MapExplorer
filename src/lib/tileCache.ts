@@ -18,11 +18,49 @@ export function overlayCacheName(mapUuid: string, version: string): string {
   return `${mapUuid}-${version}`;
 }
 
-export async function isOverlayCached(
+// Each overlay cache also holds this entry, which records how many tiles the
+// version's manifest listed, so a partially cached version can be told apart
+// from a complete one without asking the server.
+const MANIFEST_ENTRY_PATH = '/.overlay-cache-manifest';
+
+function manifestEntryUrl(): string {
+  return new URL(MANIFEST_ENTRY_PATH, location.origin).href;
+}
+
+function isManifestEntry(request: Request): boolean {
+  return new URL(request.url).pathname === MANIFEST_ENTRY_PATH;
+}
+
+export type OverlayCacheStatus =
+  | { status: 'none' }
+  | { status: 'partial'; cached: number; total: number }
+  // `total` is unknown for caches filled before the manifest entry existed.
+  | { status: 'complete'; cached: number; total?: number };
+
+export async function getOverlayCacheStatus(
   mapUuid: string,
   version: string,
-): Promise<boolean> {
-  return caches.has(overlayCacheName(mapUuid, version));
+): Promise<OverlayCacheStatus> {
+  const name = overlayCacheName(mapUuid, version);
+  if (!(await caches.has(name))) {
+    return { status: 'none' };
+  }
+  const cache = await caches.open(name);
+  const keys = await cache.keys();
+  const cached = keys.filter((key) => !isManifestEntry(key)).length;
+  const manifest = await cache.match(manifestEntryUrl());
+  const total = manifest
+    ? ((await manifest.json()) as { total?: number }).total
+    : undefined;
+  if (total === undefined) {
+    return cached > 0 ? { status: 'complete', cached } : { status: 'none' };
+  }
+  if (cached === 0 && total > 0) {
+    return { status: 'none' };
+  }
+  return cached < total
+    ? { status: 'partial', cached, total }
+    : { status: 'complete', cached, total };
 }
 
 // Downloads every tile listed in the version's manifest into its cache.
@@ -36,6 +74,13 @@ export async function cacheOverlayTiles(
   const server = new OverlayServer(baseUrl, () => accessToken);
   const tiles = await server.listTiles(mapUuid, version);
   const cache = await caches.open(overlayCacheName(mapUuid, version));
+  // Written first, so an interrupted run still shows as partially cached.
+  await cache.put(
+    manifestEntryUrl(),
+    new Response(JSON.stringify({ total: tiles.length }), {
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
   const init = accessToken
     ? { headers: { Authorization: `Bearer ${accessToken}` } }
     : undefined;
