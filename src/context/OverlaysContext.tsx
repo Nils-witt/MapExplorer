@@ -17,7 +17,7 @@ import {
   OverlayServer,
 } from '../api/OverlayServer.ts';
 import { type ConnectedServer, isServerEnabled } from '../types.ts';
-import { useAuth } from './AuthContext.tsx';
+import { useServerAuth } from './ServerAuthContext.tsx';
 import {
   loadAvailableOverlays,
   loadGeoObjects,
@@ -113,7 +113,7 @@ const OverlaysContext = createContext<OverlaysContextValue | null>(null);
 
 export function OverlaysProvider({ children }: { children: ReactNode }) {
   const { overlayServers: allOverlayServers } = useConnectedServers();
-  const { accessToken } = useAuth();
+  const { tokens } = useServerAuth();
   // Only these are fetched from and drawn. Disabled servers keep their
   // cached overlays and geo objects for when they're enabled again.
   const overlayServers = useMemo(
@@ -179,7 +179,10 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       const fetchedGeoObjects: GeoObjectsByServer = {};
       await Promise.all(
         overlayServers.map(async (server) => {
-          const ovS = new OverlayServer(server.baseUrl, () => accessToken);
+          const ovS = new OverlayServer(
+            server.baseUrl,
+            () => tokens[server.id] ?? null,
+          );
           let maps: OverlayMap[];
           try {
             maps = await ovS.listOverlays({}, controller.signal);
@@ -293,7 +296,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     return () => {
       controller.abort();
     };
-  }, [allOverlayServers, overlayServers, accessToken]);
+  }, [allOverlayServers, overlayServers, tokens]);
 
   useEffect(() => {
     console.log('Overlays updated:', overlays);
@@ -418,7 +421,10 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
       }[] = [];
       await Promise.all(
         enabledSources.map(async ({ overlay, server, version }) => {
-          const ovS = new OverlayServer(server.baseUrl, () => accessToken);
+          const ovS = new OverlayServer(
+            server.baseUrl,
+            () => tokens[server.id] ?? null,
+          );
           const cached =
             layersRef.current[server.id]?.[overlay.uuid]?.[version] ?? [];
           try {
@@ -490,7 +496,7 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
     return () => {
       controller.abort();
     };
-  }, [cacheLoaded, enabledSources, accessToken]);
+  }, [cacheLoaded, enabledSources, tokens]);
 
   const isLayerVisible = useCallback(
     (overlayId: string, name: string) =>

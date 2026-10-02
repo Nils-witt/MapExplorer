@@ -504,3 +504,41 @@ export function deleteDatabase(): Promise<void> {
     request.onerror = () => reject(request.error);
   });
 }
+
+// Sessions from signing in to a connected server itself, rather than through
+// SSO, keyed by server id. Kept in localStorage like the SSO session.
+export const SERVER_SESSIONS_STORAGE_KEY = 'mapexplorer.serverSessions';
+
+export interface ServerSession {
+  kind: 'overlay' | 'unit';
+  username: string;
+  token: string;
+  // Milliseconds since the epoch, or null if unknown.
+  expiresAt: number | null;
+  // Overlay servers only; single-use, each refresh returns a new one.
+  refreshToken?: string;
+}
+
+export function loadServerSessions(): Record<string, ServerSession> {
+  const stored = readValue(SERVER_SESSIONS_STORAGE_KEY);
+  if (!stored) {
+    return {};
+  }
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, ServerSession>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveServerSessions(
+  sessions: Record<string, ServerSession>,
+): void {
+  writeValue(
+    SERVER_SESSIONS_STORAGE_KEY,
+    Object.keys(sessions).length > 0 ? JSON.stringify(sessions) : '',
+  );
+}

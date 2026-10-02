@@ -11,6 +11,10 @@ export interface MapStyle {
 export interface AppConfig {
   // The basemaps users can pick from; the first one is the default.
   mapStyles?: MapStyle[];
+  // False turns off the central SSO login: the app then loads without it,
+  // and users sign in to each connected server in the settings instead.
+  // Unset means enabled.
+  ssoEnabled?: boolean;
   oidcIssuer?: string;
   oidcClientId?: string;
   // Overlay servers (tileserve-go) and unit servers (go-unit-mangement)

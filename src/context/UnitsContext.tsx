@@ -14,8 +14,8 @@ import {
   UnitServer,
 } from '../api/UnitServer';
 import { type ConnectedServer, isServerEnabled } from '../types';
-import { useAuth } from './AuthContext';
 import { useConnectedServers } from './ConnectedServersContext';
+import { useServerAuth } from './ServerAuthContext';
 
 // How a unit server's live connection is doing.
 export type UnitServerStatus =
@@ -54,26 +54,33 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     () => unitServers.filter(isServerEnabled),
     [unitServers],
   );
-  const { accessToken, isAuthenticated } = useAuth();
+  const { tokens } = useServerAuth();
+  // Only servers there is a token for are followed. Keyed by their ids, so
+  // a renewed token doesn't restart the streams.
+  const signedInKey = enabledServers
+    .filter((server) => tokens[server.id])
+    .map((server) => server.id)
+    .join('\n');
+  const followedServers = useMemo(() => {
+    const ids = new Set(signedInKey.split('\n'));
+    return enabledServers.filter((server) => ids.has(server.id));
+  }, [enabledServers, signedInKey]);
 
   const [units, setUnits] = useState<Record<string, Record<string, Unit>>>({});
   const [status, setStatus] = useState<Record<string, UnitServerStatus>>({});
 
   // Streams read the token through a ref: renewing it mustn't tear down
   // every connection, but a reconnect has to use the fresh one.
-  const tokenRef = useRef(accessToken);
+  const tokensRef = useRef(tokens);
   useEffect(() => {
-    tokenRef.current = accessToken;
-  }, [accessToken]);
+    tokensRef.current = tokens;
+  }, [tokens]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
-    const stops = enabledServers.map((server) =>
+    const stops = followedServers.map((server) =>
       followServer(
         server,
-        () => tokenRef.current,
+        () => tokensRef.current[server.id] ?? null,
         (update) =>
           setUnits((prev) => ({
             ...prev,
@@ -84,7 +91,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
       ),
     );
     return () => stops.forEach((stop) => stop());
-  }, [enabledServers, isAuthenticated]);
+  }, [followedServers]);
 
   // State can still hold removed or disabled servers, or units from before
   // signing out; only what's current is passed on.
@@ -96,7 +103,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
         currentStatus[server.id] = { state: 'disabled' };
         continue;
       }
-      if (!isAuthenticated) {
+      if (!tokens[server.id]) {
         currentStatus[server.id] = { state: 'signedOut' };
         continue;
       }
@@ -111,7 +118,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
       )
       .sort((a, b) => a.unit.name.localeCompare(b.unit.name));
     return { units: current, allUnits, status: currentStatus };
-  }, [unitServers, isAuthenticated, units, status]);
+  }, [unitServers, tokens, units, status]);
 
   return (
     <UnitsContext.Provider value={value}>{children}</UnitsContext.Provider>

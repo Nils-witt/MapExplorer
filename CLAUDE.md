@@ -31,8 +31,10 @@ Both API clients mirror the servers' OpenAPI specs; the comments in them name th
 
 **Auth.** `src/lib/oidc.ts` sets up authorization-code + PKCE through a single shared `UserManager` (oidc-client-ts). The session is stored in localStorage. Automatic silent renew is off. Instead, `renewOidcUser()` is driven by `AuthContext`, which serializes renewals across tabs with `navigator.locks` because of refresh-token rotation. If a renewal fails for a network reason, the app keeps the stale session so it can keep working offline. Routes: `/login` and `/login/callback` are public; everything else is behind `RequireAuth`.
 
+Setting `ssoEnabled: false` in config.json turns the central login off. `AuthContext` then skips OIDC entirely, `RequireAuth` lets everyone through, and users sign in to each connected server with its own account (Settings → Connected Servers). `ServerAuthContext` holds these per-server sessions in localStorage (`mapexplorer.serverSessions`) and refreshes overlay-server tokens shortly before they expire, under a per-server `navigator.locks` lock. Its `tokens` map (server id → bearer token: the server's own session if there is one, otherwise the SSO token) is what the API clients, `MapView` and the tile cache use.
+
 **Provider stack** (`App.tsx` → `DataProviders.tsx`, a layout route so state survives navigation):
-`AuthProvider` → `ConnectedServersProvider` → `OverlaysProvider` → `UnitsProvider` → `DisplaySettingsProvider`.
+`AuthProvider` → `ConnectedServersProvider` → `ServerAuthProvider` → `OverlaysProvider` → `UnitsProvider` → `DisplaySettingsProvider`.
 
 - `ConnectedServersContext` merges user-added servers with the servers the deployment configures. Configured servers get IDs of the form `configured-overlay-server:<url>` / `configured-unit-server:<url>`. A legacy bare-prefix ID is kept for backward compatibility. Servers can be disabled; use `isServerEnabled()`, since an unset `enabled` means enabled.
 - `OverlaysContext` fetches the overlay list, versions and geo objects from every enabled server. It tracks which overlays are enabled, their draw order, opacity, and pinned version, and resolves them into `enabledOverlays` for the map.

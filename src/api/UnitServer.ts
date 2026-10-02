@@ -74,6 +74,14 @@ export class UnitServerError extends Error {
 // Resolves the bearer token to send, or null when signed out.
 export type TokenProvider = () => string | null | Promise<string | null>;
 
+// The `LoginResponse` schema, reduced to what the app keeps.
+export interface UnitServerSession {
+  token: string;
+  // Milliseconds since the epoch.
+  expiresAt: number | null;
+  username: string;
+}
+
 // WebSocket close codes the server ends the event stream with.
 export const UNIT_EVENTS_SESSION_ENDED = 1008;
 
@@ -84,6 +92,45 @@ export class UnitServer {
   constructor(baseUrl: string, getToken: TokenProvider = () => null) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.getToken = getToken;
+  }
+
+  // Signs in with an account of the server (POST /api/auth/login).
+  static async login(
+    baseUrl: string,
+    username: string,
+    password: string,
+  ): Promise<UnitServerSession> {
+    const response = await fetch(
+      `${baseUrl.replace(/\/+$/, '')}/api/auth/login`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      },
+    );
+    if (!response.ok) {
+      throw await errorFromResponse(response);
+    }
+    const body = (await response.json()) as {
+      token: string;
+      expiresAt?: string;
+      user?: { username?: string };
+    };
+    const expiresAt = body.expiresAt ? Date.parse(body.expiresAt) : NaN;
+    return {
+      token: body.token,
+      expiresAt: Number.isNaN(expiresAt) ? null : expiresAt,
+      username: body.user?.username ?? username,
+    };
+  }
+
+  // Ends the session of the token (POST /api/auth/logout). Always succeeds
+  // on the server, so only network errors reject.
+  static async logout(baseUrl: string, token: string): Promise<void> {
+    await fetch(`${baseUrl.replace(/\/+$/, '')}/api/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
   }
 
   // Lists every unit, sorted by name.
@@ -113,18 +160,22 @@ export class UnitServer {
       signal,
     });
     if (!response.ok) {
-      // Errors come back as {"error": "..."}.
-      let message = `${response.status} ${response.statusText}`;
-      try {
-        const body = (await response.json()) as { error?: string };
-        if (body.error) {
-          message = body.error;
-        }
-      } catch {
-        // Not JSON, e.g. from a proxy in front of the server.
-      }
-      throw new UnitServerError(message, response.status);
+      throw await errorFromResponse(response);
     }
     return (await response.json()) as T;
   }
+}
+
+async function errorFromResponse(response: Response): Promise<UnitServerError> {
+  // Errors come back as {"error": "..."}.
+  let message = `${response.status} ${response.statusText}`;
+  try {
+    const body = (await response.json()) as { error?: string };
+    if (body.error) {
+      message = body.error;
+    }
+  } catch {
+    // Not JSON, e.g. from a proxy in front of the server.
+  }
+  return new UnitServerError(message, response.status);
 }

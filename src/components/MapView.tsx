@@ -21,7 +21,7 @@ import { SearchButtonControl } from './mapControls/SearchButtonControl';
 import { SearchDialog } from './SearchDialog';
 import { SettingsButtonControl } from './mapControls/SettingsButtonControl';
 import { UnitMarkers } from './UnitMarkers';
-import { useAuth } from '../context/AuthContext';
+import { useServerAuth } from '../context/ServerAuthContext';
 import { useConnectedServers } from '../context/ConnectedServersContext';
 import { type EnabledOverlay, useOverlays } from '../context/OverlaysContext';
 import { loadAppConfig } from '../lib/config';
@@ -95,16 +95,16 @@ function overlayLayerIds(overlay: EnabledOverlay): string[] {
 
 export function MapView() {
   const mapRef = useRef<MapRef | null>(null);
-  const { accessToken } = useAuth();
+  const { tokens } = useServerAuth();
   const { overlayServers } = useConnectedServers();
   const { enabledOverlays } = useOverlays();
 
   // transformRequest is only read when the map is created, so it looks the
   // token and servers up through a ref to always see the current values.
-  const authRef = useRef({ accessToken, overlayServers });
+  const authRef = useRef({ tokens, overlayServers });
   useEffect(() => {
-    authRef.current = { accessToken, overlayServers };
-  }, [accessToken, overlayServers]);
+    authRef.current = { tokens, overlayServers };
+  }, [tokens, overlayServers]);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Once true, stays true - lets the (lazy-loaded) dialog stay mounted
@@ -207,11 +207,12 @@ export function MapView() {
           url: string,
           _resourceType?: ResourceType,
         ): RequestParameters | undefined => {
-          const { accessToken, overlayServers } = authRef.current;
-          const isOverlayServerUrl = overlayServers.some((server) =>
-            url.startsWith(server.baseUrl),
+          const { tokens, overlayServers } = authRef.current;
+          const server = overlayServers.find((candidate) =>
+            url.startsWith(candidate.baseUrl),
           );
-          if (!accessToken || !isOverlayServerUrl) {
+          const accessToken = server ? tokens[server.id] : null;
+          if (!accessToken) {
             return undefined;
           }
           return { url, headers: { Authorization: `Bearer ${accessToken}` } };

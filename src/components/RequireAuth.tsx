@@ -5,8 +5,9 @@ import { useAuth } from '../context/AuthContext';
 
 // Sends signed-out users to the login page. Waits for the stored session to
 // be read first, so a reload doesn't bounce a signed-in user to /login.
+// Without SSO there is nothing to sign in to up front.
 export function RequireAuth() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, ssoEnabled } = useAuth();
   if (loading) {
     return (
       <Box
@@ -21,7 +22,7 @@ export function RequireAuth() {
       </Box>
     );
   }
-  if (!isAuthenticated) {
+  if (ssoEnabled && !isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
   return <Outlet />;

@@ -2,6 +2,7 @@
   "mapStyles": [{ "name": "", "url": "" }],
   "overlayServers": [{ "name": "", "url": "" }],
   "unitServers": [{ "name": "", "url": "" }],
+  "ssoEnabled": true,
   "oidcIssuer": "",
   "oidcClientId": ""
 }

@@ -6,7 +6,7 @@ import DownloadDoneIcon from '@mui/icons-material/DownloadDone';
 import DownloadForOfflineIcon from '@mui/icons-material/DownloadForOffline';
 import type { OverlayMap } from '../../api/OverlayServer.ts';
 import type { ConnectedServer } from '../../types.ts';
-import { useAuth } from '../../context/AuthContext.tsx';
+import { useServerAuth } from '../../context/ServerAuthContext.tsx';
 import {
   cacheOverlayTiles,
   isOverlayCached,
@@ -31,7 +31,7 @@ export default function OverlayCacheButton({
   overlay,
   version,
 }: OverlayCacheButtonProps) {
-  const { accessToken } = useAuth();
+  const { tokens } = useServerAuth();
   // Keyed by version so switching versions resets the state.
   const [state, setState] = useState<{
     version: string;
@@ -69,7 +69,7 @@ export default function OverlayCacheButton({
     try {
       const result = await cacheOverlayTiles(
         server.baseUrl,
-        accessToken,
+        tokens[server.id] ?? null,
         overlay.uuid,
         version,
         (done, total) => update({ status: 'caching', done, total }),

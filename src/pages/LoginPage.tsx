@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router';
 import Alert from '@mui/material/Alert';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
@@ -7,11 +8,13 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import { useAuth } from '../context/AuthContext';
 import { startOidcLogin } from '../lib/oidc';
 
 function LoginPage() {
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { loading, ssoEnabled } = useAuth();
 
   const startSSO = () => {
     setError(null);
@@ -21,6 +24,11 @@ function LoginPage() {
       setError(err instanceof Error ? err.message : String(err));
     });
   };
+
+  // Without SSO, users sign in to each server from the settings.
+  if (!loading && !ssoEnabled) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <Box

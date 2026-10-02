@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import Stack from '@mui/material/Stack';
 import { useConnectedServers } from '../../context/ConnectedServersContext.tsx';
+import { useServerAuth } from '../../context/ServerAuthContext.tsx';
 import {
   type UnitServerStatus,
   useUnits,
@@ -20,6 +21,7 @@ import {
   isConfiguredServerId,
 } from '../../lib/config.ts';
 import { type ConnectedServer, isServerEnabled } from '../../types.ts';
+import ServerSignIn from './ServerSignIn.tsx';
 
 // Sets whether one server of a list is enabled.
 function setEnabled(
@@ -38,6 +40,7 @@ export default function ConnectedServersSettings() {
   const { overlayServers, unitServers, setOverlayServers, setUnitServers } =
     useConnectedServers();
   const { units, status } = useUnits();
+  const { logout } = useServerAuth();
 
   return (
     <Stack spacing={1.5}>
@@ -58,6 +61,7 @@ export default function ConnectedServersSettings() {
               <Typography variant="subtitle1" sx={{ wordBreak: 'break-all' }}>
                 {server.baseUrl}
               </Typography>
+              <ServerSignIn server={server} kind="overlay" />
             </Stack>
             <EnableServerSwitch
               server={server}
@@ -68,11 +72,12 @@ export default function ConnectedServersSettings() {
             <RemoveServerButton
               server={server}
               configuredPrefix={CONFIGURED_OVERLAY_SERVER_ID}
-              onRemove={() =>
+              onRemove={() => {
+                void logout(server);
                 setOverlayServers((prev) =>
                   prev.filter((other) => other.id !== server.id),
-                )
-              }
+                );
+              }}
             />
           </Stack>
         </Paper>
@@ -116,6 +121,7 @@ export default function ConnectedServersSettings() {
                   {countUnits(units[server.id])}
                 </Typography>
               </Stack>
+              <ServerSignIn server={server} kind="unit" />
             </Stack>
             <EnableServerSwitch
               server={server}
@@ -126,11 +132,12 @@ export default function ConnectedServersSettings() {
             <RemoveServerButton
               server={server}
               configuredPrefix={CONFIGURED_UNIT_SERVER_ID}
-              onRemove={() =>
+              onRemove={() => {
+                void logout(server);
                 setUnitServers((prev) =>
                   prev.filter((other) => other.id !== server.id),
-                )
-              }
+                );
+              }}
             />
           </Stack>
         </Paper>
@@ -138,7 +145,7 @@ export default function ConnectedServersSettings() {
       <AddServerForm
         title="Add unit server"
         placeholder="https://units.example.com"
-        helperText="The server must allow this app in CORS_ALLOWED_ORIGINS and accept its sign-in tokens."
+        helperText="The server must allow this app in CORS_ALLOWED_ORIGINS. To use single sign-on, it must also accept the app's sign-in tokens."
         onAdd={(name, baseUrl) =>
           setUnitServers((prev) => [
             ...prev,

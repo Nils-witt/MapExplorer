@@ -132,6 +132,55 @@ export class OverlayServerError extends Error {
 // Resolves the bearer token to send, or null to call the server anonymously.
 export type TokenProvider = () => string | null | Promise<string | null>;
 
+// The `LoginResponse` schema, with the token's expiry read from its claims.
+export interface OverlayServerSession {
+  token: string;
+  refreshToken: string | null;
+  // Milliseconds since the epoch, or null if the token doesn't say.
+  expiresAt: number | null;
+}
+
+// The longest token lifetime the server grants (`ttl_seconds`).
+const LOGIN_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+// Reads the `exp` claim of a JWT without verifying it.
+function jwtExpiry(token: string): number | null {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(payload)) as { exp?: unknown };
+    return typeof exp === 'number' ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function postSession(
+  url: string,
+  body: unknown,
+): Promise<OverlayServerSession> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new OverlayServerError(
+      message || `${response.status} ${response.statusText}`,
+      response.status,
+    );
+  }
+  const { token, refresh_token } = (await response.json()) as {
+    token: string;
+    refresh_token?: string;
+  };
+  return {
+    token,
+    refreshToken: refresh_token ?? null,
+    expiresAt: jwtExpiry(token),
+  };
+}
+
 export class OverlayServer {
   readonly baseUrl: string;
   private readonly getToken: TokenProvider;
@@ -139,6 +188,30 @@ export class OverlayServer {
   constructor(baseUrl: string, getToken: TokenProvider = () => null) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.getToken = getToken;
+  }
+
+  // Signs in with a local or LDAP account of the server (POST /login).
+  static login(
+    baseUrl: string,
+    username: string,
+    password: string,
+  ): Promise<OverlayServerSession> {
+    return postSession(`${baseUrl.replace(/\/+$/, '')}/login`, {
+      username,
+      password,
+      ttl_seconds: LOGIN_TTL_SECONDS,
+    });
+  }
+
+  // Redeems a refresh token for new tokens (POST /refresh). The refresh
+  // token is single-use, so the one returned replaces it.
+  static refresh(
+    baseUrl: string,
+    refreshToken: string,
+  ): Promise<OverlayServerSession> {
+    return postSession(`${baseUrl.replace(/\/+$/, '')}/refresh`, {
+      refresh_token: refreshToken,
+    });
   }
 
   // Lists the maps the signed-in user may see: those visible to all, their

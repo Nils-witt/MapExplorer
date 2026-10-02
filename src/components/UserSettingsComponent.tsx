@@ -2,14 +2,16 @@ import { Avatar, Button, Stack, Typography } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 
 function UserSettingsComponent() {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, ssoEnabled } = useAuth();
 
   if (!user || !profile) {
     return (
       <Stack spacing={1}>
         <Typography variant="subtitle1">User</Typography>
         <Typography variant="body2" color="text.secondary">
-          Not signed in.
+          {ssoEnabled
+            ? 'Not signed in.'
+            : 'Single sign-on is disabled. Sign in to each server under Connected Servers.'}
         </Typography>
       </Stack>
     );

@@ -8,6 +8,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserProfile } from 'oidc-client-ts';
+import { loadAppConfig } from '../lib/config';
 import { getUserManager, renewOidcUser, startOidcLogin } from '../lib/oidc';
 
 interface AuthContextValue {
@@ -21,6 +22,9 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   // True until the stored session has been read on startup.
   loading: boolean;
+  // False when config.json turns off SSO; users then sign in to each server
+  // in the settings instead. True until config.json has been read.
+  ssoEnabled: boolean;
   // Set when the OIDC setup itself failed, e.g. config.json lacks the SSO
   // settings.
   error: string | null;
@@ -35,13 +39,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ssoEnabled, setSsoEnabled] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    getUserManager()
-      .then(async (userManager) => {
+    loadAppConfig()
+      .then(async (config) => {
+        if (cancelled) {
+          return;
+        }
+        if (config.ssoEnabled === false) {
+          setSsoEnabled(false);
+          return;
+        }
+        const userManager = await getUserManager();
         if (cancelled) {
           return;
         }
@@ -113,12 +126,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(() => startOidcLogin(), []);
+  const login = useCallback(
+    () => (ssoEnabled ? startOidcLogin() : Promise.resolve()),
+    [ssoEnabled],
+  );
 
   const logout = useCallback(async () => {
+    if (!ssoEnabled) {
+      return;
+    }
     const userManager = await getUserManager();
     await userManager.removeUser();
-  }, []);
+  }, [ssoEnabled]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -129,11 +148,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshToken: user?.refresh_token ?? null,
       isAuthenticated: user !== null,
       loading,
+      ssoEnabled,
       error,
       login,
       logout,
     }),
-    [user, loading, error, login, logout],
+    [user, loading, ssoEnabled, error, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
