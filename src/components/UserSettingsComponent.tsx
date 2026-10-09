@@ -34,7 +34,6 @@ function UserSettingsComponent() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="subtitle1">User</Typography>
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
         <Avatar src={profile.picture} alt={displayName}>
           {displayName.charAt(0).toUpperCase()}

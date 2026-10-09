@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -18,6 +17,8 @@ import OverlaysSettings from './settings/OverlaysSettings.tsx';
 import ServiceWorkerSettings from './settings/ServiceWorkerSettings.tsx';
 import UnitsSettings from './settings/UnitsSettings.tsx';
 import DisplaySettings from './settings/DisplaySettings.tsx';
+import IconButton from '@mui/material/IconButton';
+import CloseIcon from '@mui/icons-material/Close';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -76,7 +77,20 @@ export function SettingsDialog({
         },
       }}
     >
-      <DialogTitle>Map settings</DialogTitle>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          px: 2,
+          py: 1,
+        }}
+      >
+        <DialogTitle>Map settings</DialogTitle>
+        <IconButton onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
       <Stack
         direction={isSmallScreen ? 'column' : 'row'}
         sx={{ flexGrow: 1, minHeight: 0 }}
@@ -124,13 +138,12 @@ export function SettingsDialog({
       <DialogActions sx={{ justifyContent: 'space-between' }}>
         <Typography variant="caption" color="text.secondary">
           {[
-            __APP_VERSION__ !== 'unknown' ? `v${__APP_VERSION__}` : null,
+            __APP_VERSION__ !== 'unknown' ? `${__APP_VERSION__}` : null,
             __GIT_COMMIT__ !== 'unknown' ? `(${__GIT_COMMIT__})` : null,
           ]
             .filter(Boolean)
             .join(' ')}
         </Typography>
-        <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
   );
