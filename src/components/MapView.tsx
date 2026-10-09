@@ -16,6 +16,7 @@ import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './MapView.scss';
 import Alert from '@mui/material/Alert';
+import { useColorScheme } from '@mui/material/styles';
 import { FullscreenButtonControl } from './mapControls/FullscreenButtonControl';
 import { SearchButtonControl } from './mapControls/SearchButtonControl';
 import { SearchDialog } from './SearchDialog';
@@ -28,6 +29,7 @@ import { loadAppConfig } from '../lib/config';
 
 import {
   applyConfig,
+  type ColorScheme,
   loadMapPosition,
   loadStyleUrl,
   saveCustomStyleUrl,
@@ -112,9 +114,10 @@ export function MapView() {
   // deferring the initial chunk load until first opened.
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [styleUrl, setStyleUrl] = useState(() =>
-    loadStyleUrl(DEFAULT_STYLE_URL),
-  );
+  // One basemap per color scheme; the map shows the current scheme's.
+  const [styleUrls, setStyleUrls] = useState(loadStyleUrls);
+  const colorScheme = useColorScheme().colorScheme ?? 'light';
+  const styleUrl = styleUrls[colorScheme];
   const [initialPosition] = useState(
     () => loadMapPosition() ?? DEFAULT_MAP_POSITION,
   );
@@ -161,11 +164,12 @@ export function MapView() {
     };
   }, [overlayOrder]);
 
-  const handleApplyStyle = (url: string) => {
-    saveCustomStyleUrl(url);
-    const nextStyleUrl = loadStyleUrl(DEFAULT_STYLE_URL);
-    setStyleUrl(nextStyleUrl);
-    return nextStyleUrl;
+  const handleApplyStyle = (scheme: ColorScheme, url: string) => {
+    saveCustomStyleUrl(url, scheme);
+    // Dark mode may follow the light mode style, so reload both.
+    const nextStyleUrls = loadStyleUrls();
+    setStyleUrls(nextStyleUrls);
+    return nextStyleUrls[scheme];
   };
 
   const handleMoveEnd = (event: ViewStateChangeEvent) => {
@@ -336,11 +340,18 @@ export function MapView() {
           <SettingsDialog
             open={settingsOpen}
             onClose={() => setSettingsOpen(false)}
-            styleUrl={styleUrl}
+            styleUrls={styleUrls}
             onApplyStyle={handleApplyStyle}
           />
         </Suspense>
       ) : null}
     </>
   );
+}
+
+function loadStyleUrls(): Record<ColorScheme, string> {
+  return {
+    light: loadStyleUrl(DEFAULT_STYLE_URL, 'light'),
+    dark: loadStyleUrl(DEFAULT_STYLE_URL, 'dark'),
+  };
 }

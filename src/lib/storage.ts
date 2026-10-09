@@ -13,6 +13,7 @@ const MAP_STYLES_STORAGE_KEY = 'mapexplorer.mapStyles';
 // Where the default style was kept before config.json had a list of them.
 const LEGACY_STYLE_URL_STORAGE_KEY = 'mapexplorer.styleUrl';
 const CUSTOM_STYLE_URL_STORAGE_KEY = 'mapexplorer.customStyleUrl';
+const CUSTOM_DARK_STYLE_URL_STORAGE_KEY = 'mapexplorer.customDarkStyleUrl';
 const MAP_POSITION_STORAGE_KEY = 'mapexplorer.mapPosition';
 const ENABLED_OVERLAYS_STORAGE_KEY = 'mapexplorer.enabledOverlays';
 const OVERLAY_OPACITIES_STORAGE_KEY = 'mapexplorer.overlayOpacities';
@@ -422,17 +423,37 @@ function loadDefaultStyleUrl(): string {
   return loadMapStyles()[0]?.url ?? readValue(LEGACY_STYLE_URL_STORAGE_KEY);
 }
 
-export function loadStyleUrl(defaultStyleUrl: string): string {
+export type ColorScheme = 'light' | 'dark';
+
+// The basemap for each color scheme. Without a style of its own, dark mode
+// uses the light mode one.
+export function loadStyleUrl(
+  defaultStyleUrl: string,
+  scheme: ColorScheme = 'light',
+): string {
+  if (scheme === 'dark') {
+    return loadCustomStyleUrl('dark') || loadStyleUrl(defaultStyleUrl, 'light');
+  }
   return loadCustomStyleUrl() || loadDefaultStyleUrl() || defaultStyleUrl;
 }
 
-export function loadCustomStyleUrl(): string {
-  return readValue(CUSTOM_STYLE_URL_STORAGE_KEY);
+export function loadCustomStyleUrl(scheme: ColorScheme = 'light'): string {
+  return readValue(customStyleUrlKey(scheme));
 }
 
-// An empty url goes back to the default style.
-export function saveCustomStyleUrl(url: string): void {
-  writeValue(CUSTOM_STYLE_URL_STORAGE_KEY, url);
+// An empty url goes back to the default style, in dark mode to the light
+// mode one.
+export function saveCustomStyleUrl(
+  url: string,
+  scheme: ColorScheme = 'light',
+): void {
+  writeValue(customStyleUrlKey(scheme), url);
+}
+
+function customStyleUrlKey(scheme: ColorScheme): string {
+  return scheme === 'dark'
+    ? CUSTOM_DARK_STYLE_URL_STORAGE_KEY
+    : CUSTOM_STYLE_URL_STORAGE_KEY;
 }
 
 function isMapPosition(value: unknown): value is MapPosition {

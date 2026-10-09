@@ -18,13 +18,14 @@ import ServiceWorkerSettings from './settings/ServiceWorkerSettings.tsx';
 import UnitsSettings from './settings/UnitsSettings.tsx';
 import DisplaySettings from './settings/DisplaySettings.tsx';
 import IconButton from '@mui/material/IconButton';
+import type { ColorScheme } from '../lib/storage';
 import CloseIcon from '@mui/icons-material/Close';
 
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
-  styleUrl: string;
-  onApplyStyle: (url: string) => string;
+  styleUrls: Record<ColorScheme, string>;
+  onApplyStyle: (scheme: ColorScheme, url: string) => string;
 }
 
 type OpenTabs =
@@ -49,7 +50,7 @@ const TABS: { value: OpenTabs; label: string }[] = [
 export function SettingsDialog({
   open,
   onClose,
-  styleUrl,
+  styleUrls,
   onApplyStyle,
 }: SettingsDialogProps) {
   const [openTabs, setOpenTabs] = useState<OpenTabs>('user');
@@ -124,7 +125,7 @@ export function SettingsDialog({
             {openTabs === 'user' && <UserSettingsComponent />}
             {openTabs === 'map' && (
               <MapSettingsComponent
-                styleUrl={styleUrl}
+                styleUrls={styleUrls}
                 onApplyStyle={onApplyStyle}
               />
             )}
