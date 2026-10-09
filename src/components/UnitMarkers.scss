@@ -60,5 +60,9 @@
 
   &__time {
     color: #666;
+
+    [data-mui-color-scheme='dark'] & {
+      color: #aaa;
+    }
   }
 }
