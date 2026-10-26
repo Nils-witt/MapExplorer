@@ -31,10 +31,10 @@
     "lint-staged": "^17.6.0",
     "oxlint": "^1.89.0",
     "prettier": "^3.9.10",
-    "rolldown": "~1.2.14",
-    "sass": "^1.105.2",
+    "rolldown": "~1.2.15",
+    "sass": "^1.106.1",
     "typescript": "~7.0.2",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "vite-plugin-pwa": "^2.0.0"
   },
   "dependencies": {
