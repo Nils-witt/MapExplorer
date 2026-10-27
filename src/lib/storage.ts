@@ -511,6 +511,19 @@ export function saveUnitSymbolSize(size: number): void {
   );
 }
 
+// How units are drawn: as 2D tactical symbols, or as 3D models.
+export type UnitDisplayMode = '2d' | '3d';
+const UNIT_DISPLAY_MODE_STORAGE_KEY = 'mapexplorer.unitDisplayMode';
+
+export function loadUnitDisplayMode(): UnitDisplayMode {
+  return readValue(UNIT_DISPLAY_MODE_STORAGE_KEY) === '3d' ? '3d' : '2d';
+}
+
+// The default (2D) isn't stored.
+export function saveUnitDisplayMode(mode: UnitDisplayMode): void {
+  writeValue(UNIT_DISPLAY_MODE_STORAGE_KEY, mode === '3d' ? mode : '');
+}
+
 // Deletes the whole IndexedDB database. Open connections block the deletion
 // until they close (e.g. on reload), so a blocked request counts as done.
 export function deleteDatabase(): Promise<void> {

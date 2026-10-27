@@ -120,7 +120,7 @@ const UnitMarker = memo(function UnitMarker({
   );
 });
 
-function UnitDetails({
+export function UnitDetails({
   unit,
   position,
 }: {

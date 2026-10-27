@@ -4,5 +4,6 @@
   "unitServers": [{ "name": "", "url": "" }],
   "ssoEnabled": true,
   "oidcIssuer": "",
-  "oidcClientId": ""
+  "oidcClientId": "",
+  "unitModelUrl": ""
 }

@@ -22,8 +22,10 @@ import { SearchButtonControl } from './mapControls/SearchButtonControl';
 import { SearchDialog } from './SearchDialog';
 import { SettingsButtonControl } from './mapControls/SettingsButtonControl';
 import { UnitMarkers } from './UnitMarkers';
+import { UNIT_MODEL_LAYER_ID, UnitModels } from './UnitModels';
 import { useServerAuth } from '../context/ServerAuthContext';
 import { useConnectedServers } from '../context/ConnectedServersContext';
+import { useDisplaySettings } from '../context/DisplaySettingsContext';
 import { type EnabledOverlay, useOverlays } from '../context/OverlaysContext';
 import { loadAppConfig } from '../lib/config';
 
@@ -100,6 +102,7 @@ export function MapView() {
   const { tokens } = useServerAuth();
   const { overlayServers } = useConnectedServers();
   const { enabledOverlays } = useOverlays();
+  const { unitDisplayMode } = useDisplaySettings();
 
   // transformRequest is only read when the map is created, so it looks the
   // token and servers up through a ref to always see the current values.
@@ -137,10 +140,14 @@ export function MapView() {
 
   // Layers are only stacked in render order when first added, so move them
   // to the top one by one, bottom first, whenever the order changes. Each
-  // overlay's GeoJSON layers sit right above its tiles.
+  // overlay's GeoJSON layers sit right above its tiles, and the 3D unit
+  // models (when shown) above all of them.
   // Layers re-added later, like a raster layer whose source was remounted,
   // are moved back into place on the next style update.
-  const overlayOrder = enabledOverlays.flatMap(overlayLayerIds).join('\n');
+  const overlayOrder = [
+    ...enabledOverlays.flatMap(overlayLayerIds),
+    UNIT_MODEL_LAYER_ID,
+  ].join('\n');
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || !overlayOrder) {
@@ -311,7 +318,7 @@ export function MapView() {
             })}
           </Fragment>
         ))}
-        <UnitMarkers />
+        {unitDisplayMode === '3d' ? <UnitModels /> : <UnitMarkers />}
       </Map>
 
       {mapActionError ? (

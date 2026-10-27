@@ -8,15 +8,23 @@ import { useColorScheme } from '@mui/material/styles';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import SettingsBrightnessIcon from '@mui/icons-material/SettingsBrightness';
+import ViewInArIcon from '@mui/icons-material/ViewInAr';
+import RectangleOutlinedIcon from '@mui/icons-material/RectangleOutlined';
 import { useDisplaySettings } from '../../context/DisplaySettingsContext.tsx';
 import {
   DEFAULT_UNIT_SYMBOL_SIZE,
   MAX_UNIT_SYMBOL_SIZE,
   MIN_UNIT_SYMBOL_SIZE,
+  type UnitDisplayMode,
 } from '../../lib/storage.ts';
 
 export default function DisplaySettings() {
-  const { unitSymbolSize, setUnitSymbolSize } = useDisplaySettings();
+  const {
+    unitSymbolSize,
+    setUnitSymbolSize,
+    unitDisplayMode,
+    setUnitDisplayMode,
+  } = useDisplaySettings();
   const { mode, setMode } = useColorScheme();
 
   return (
@@ -46,7 +54,33 @@ export default function DisplaySettings() {
           Dark
         </ToggleButton>
       </ToggleButtonGroup>
-      <Typography variant="subtitle1">Unit symbols</Typography>
+      <Typography variant="subtitle1">Units</Typography>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={unitDisplayMode}
+        onChange={(_event, value: UnitDisplayMode | null) => {
+          if (value) {
+            setUnitDisplayMode(value);
+          }
+        }}
+        aria-label="Unit display"
+      >
+        <ToggleButton value="2d">
+          <RectangleOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+          Symbols
+        </ToggleButton>
+        <ToggleButton value="3d">
+          <ViewInArIcon fontSize="small" sx={{ mr: 1 }} />
+          3D models
+        </ToggleButton>
+      </ToggleButtonGroup>
+      {unitDisplayMode === '3d' && (
+        <Typography variant="body2" color="text.secondary">
+          Tilt the map (right-drag or two-finger drag) to see the models in 3D.
+          Models are drawn at least as large as the size below.
+        </Typography>
+      )}
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
         <Typography variant="body2" sx={{ flexShrink: 0 }}>
           Size

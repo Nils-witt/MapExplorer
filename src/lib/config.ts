@@ -21,6 +21,9 @@ export interface AppConfig {
   // every user is connected to.
   overlayServers?: ServerConfig[];
   unitServers?: ServerConfig[];
+  // A glTF/GLB model to draw units with in 3D mode, in meters, y up and
+  // facing +z (the glTF conventions). Unset uses a built-in vehicle.
+  unitModelUrl?: string;
 }
 
 // A server the deployment connects to; the name defaults to the host.

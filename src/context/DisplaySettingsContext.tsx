@@ -1,11 +1,21 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { loadUnitSymbolSize, saveUnitSymbolSize } from '../lib/storage';
+import {
+  loadUnitDisplayMode,
+  loadUnitSymbolSize,
+  saveUnitDisplayMode,
+  saveUnitSymbolSize,
+  type UnitDisplayMode,
+} from '../lib/storage';
 
 interface DisplaySettingsContextValue {
-  // Height of unit symbols on the map, in pixels.
+  // Height of unit symbols on the map, in pixels. 3D models are scaled to
+  // be at least this long on screen.
   unitSymbolSize: number;
   setUnitSymbolSize: (size: number) => void;
+  // Whether units are drawn as 2D symbols or 3D models.
+  unitDisplayMode: UnitDisplayMode;
+  setUnitDisplayMode: (mode: UnitDisplayMode) => void;
 }
 
 const DisplaySettingsContext =
@@ -13,6 +23,7 @@ const DisplaySettingsContext =
 
 export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
   const [unitSymbolSize, setSize] = useState(loadUnitSymbolSize);
+  const [unitDisplayMode, setMode] = useState(loadUnitDisplayMode);
 
   const value = useMemo(
     () => ({
@@ -21,8 +32,13 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
         setSize(size);
         saveUnitSymbolSize(size);
       },
+      unitDisplayMode,
+      setUnitDisplayMode: (mode: UnitDisplayMode) => {
+        setMode(mode);
+        saveUnitDisplayMode(mode);
+      },
     }),
-    [unitSymbolSize],
+    [unitSymbolSize, unitDisplayMode],
   );
 
   return (

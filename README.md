@@ -26,14 +26,15 @@ Other commands: `npm run build`, `npm run lint`, `npm run format`.
 
 The app loads `/config.json` at runtime (see `config.example.json`):
 
-| Key              | Description                               |
-| ---------------- | ----------------------------------------- |
-| `mapStyles`      | Basemap styles (`name`, `url`)            |
-| `overlayServers` | Tileserve-GO servers (`name`, `url`)      |
-| `unitServers`    | UnitManagement servers (`name`, `url`)    |
-| `ssoEnabled`     | `false` to use per-server sign-in instead |
-| `oidcIssuer`     | OIDC issuer URL                           |
-| `oidcClientId`   | OIDC client ID                            |
+| Key              | Description                                    |
+| ---------------- | ---------------------------------------------- |
+| `mapStyles`      | Basemap styles (`name`, `url`)                 |
+| `overlayServers` | Tileserve-GO servers (`name`, `url`)           |
+| `unitServers`    | UnitManagement servers (`name`, `url`)         |
+| `ssoEnabled`     | `false` to use per-server sign-in instead      |
+| `oidcIssuer`     | OIDC issuer URL                                |
+| `oidcClientId`   | OIDC client ID                                 |
+| `unitModelUrl`   | glTF/GLB model for units in 3D mode (optional) |
 
 ## Deployment
 
