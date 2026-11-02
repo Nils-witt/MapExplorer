@@ -32,8 +32,8 @@
     "lint-staged": "^17.6.0",
     "oxlint": "^1.90.0",
     "prettier": "^3.9.10",
-    "rolldown": "~1.2.15",
-    "sass": "^1.106.1",
+    "rolldown": "~1.2.16",
+    "sass": "^1.107.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-pwa": "^2.0.0"
@@ -49,7 +49,7 @@
     "oidc-client-ts": "^3.5.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router": "^8.5.0",
-    "three": "^0.186.1"
+    "react-router": "^8.5.1",
+    "three": "^0.187.0"
   }
 }
